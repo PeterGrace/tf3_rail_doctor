@@ -3,7 +3,7 @@
     "files": [
         "gui/pgrace_rail_doctor/line_plugin.res.lua",
         "gui/pgrace_rail_doctor/pgrace_rail_doctor.script.tl",
-        "gui/pgrace_rail_doctor/util.d.tl",
-        "gui/pgrace_rail_doctor/util.tl"
+        "gui/pgrace_rail_doctor/suggest.d.tl",
+        "gui/pgrace_rail_doctor/suggest.tl"
     ]
 }

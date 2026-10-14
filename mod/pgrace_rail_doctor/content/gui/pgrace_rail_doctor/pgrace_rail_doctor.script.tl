@@ -2,42 +2,19 @@ local react = ug_require "::/gui/main/react.lua" as React
 local builtin = ug_require "::/gui/main/builtin.lua" as Builtin
 local content_card = ug_require "::/gui/main/content_card.tl" as ContentCard
 local line_eow = ug_require "::/gui/entity_window/line/line_eow.script.tl" as LineEow
+local suggest = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/suggest.tl" as PgraceRailDoctorSuggest
 
--- PROBE (remove before release): everything in this file is a first look at what the engine reports for a
--- line with no path. It logs with the "[rail_doctor] probe" prefix and shows the spots it found in the card.
-
-local TAG = "[rail_doctor] probe "
-local NEAREST_SIGNALS = 6
+-- A line window card for rail lines with legs that have no path: which terminals would give them one.
+-- See docs/superpowers/specs/2026-10-14-terminal-suggestions-design.md.
 
 local function log(s : string)
-	debugPrint(TAG .. s)
+	debugPrint("[rail_doctor] " .. s)
 end
 
-local function fmtPos(p : Vec3f) : string
-	if p == nil then
-		return "nil"
-	end
-	return string.format("(%.0f, %.0f, %.0f)", p.x, p.y, p.z)
-end
-
-local function dist2d(a : Vec3f, b : Vec3f) : number
-	local dx, dy = a.x - b.x, a.y - b.y
-	return math.sqrt(dx * dx + dy * dy)
-end
-
-local function modeKeys(modes : {TransportMode : boolean}) : string
-	if modes == nil then
-		return "nil"
-	end
-	local ok, s = pcall(function() : string
-		local keys : {string} = {}
-		for k, v in pairs(modes as {any : any}) do
-			keys[#keys + 1] = tostring(k) .. "=" .. tostring(v)
-		end
-		table.sort(keys)
-		return "{" .. table.concat(keys, ", ") .. "}"
-	end)
-	return ok and s as string or ("<" .. tostring(s) .. ">")
+local function fmt(text : string, values : {string : string}) : string
+	return (text:gsub("{(%w+)}", function(k : string) : string
+		return values[k] or ("{" .. k .. "}")
+	end))
 end
 
 local function entityName(e : Engine.Entity) : string
@@ -47,288 +24,202 @@ local function entityName(e : Engine.Entity) : string
 	return ok and tostring(n) or "?"
 end
 
-local record SignalInfo
-	listEntity : Engine.Entity
-	index : integer
-	kind : integer
-	edgeEntity : Engine.Entity
-	edgeIndex : integer
-	dir : string
-	pos : Vec3f
-	posSource : string
+-- One terminal a stop could use.
+local record Candidate
+	station : integer   -- zero-based, within the station group
+	terminal : integer  -- zero-based, within the station
+	node : NodeId
+	number : integer    -- as the game shows it: counted across the group, from 1
 end
 
-local record Spot
-	label : string
-	pos : Vec3f
-	nearest : {SignalInfo}
+local record StopInfo
+	name : string
+	candidates : {Candidate}
+	current : integer   -- index into candidates
 end
 
-local record Report
-	lines : {string}
-	spots : {Spot}
+local function terminalLabel(c : Candidate) : string
+	return fmt(_("Terminal {n}"), { n = tostring(c.number) })
 end
 
-local function centreOf(entity : Engine.Entity) : Vec3f
-	local bv = api.engine.getComponent(entity, api.type.ComponentType.BOUNDING_VOLUME) as Engine.Component.BoundingVolume
-	if bv == nil then
-		return nil
+-- Every terminal in the stop's station group that loads what the stop's terminal loads now.
+local function stopInfo(stop : Engine.Component.Line.Stop) : StopInfo
+	local info : StopInfo = { name = entityName(stop.stationGroup), candidates = {}, current = nil }
+	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP) as Engine.Component.StationGroup
+	if group == nil then
+		return info
 	end
-	return api.type.Vec3f.new(0.5 * (bv.bbox.min.x + bv.bbox.max.x), 0.5 * (bv.bbox.min.y + bv.bbox.max.y), 0.5 * (bv.bbox.min.z + bv.bbox.max.z))
-end
-
--- The tealdef says edgePr is {EdgeId, boolean}; other pairs turned out to be userdata with named fields at
--- runtime, so try both.
-local function readEdgePr(pr : any) : EdgeId, string
-	local okIdx, first = pcall(function() : any
-		return (pr as {any})[1]
-	end)
-	if okIdx and first ~= nil then
-		local okDir, second = pcall(function() : any
-			return (pr as {any})[2]
-		end)
-		return first as EdgeId, tostring(okDir and second or "?")
+	local stations : {Station} = {}
+	for si, stationEntity in ipairs(group.stations) do
+		stations[si] = api.engine.getComponent(stationEntity, api.type.ComponentType.STATION) as Station
 	end
-	local okNamed, edgeId = pcall(function() : any
-		return (pr as {string : any}).edgeId
-	end)
-	if okNamed and edgeId ~= nil then
-		local okDir, dir = pcall(function() : any
-			return (pr as {string : any}).dir
-		end)
-		return edgeId as EdgeId, tostring(okDir and dir or "?")
-	end
-	return nil, "?"
-end
-
-local function collectSignals(report : Report) : {SignalInfo}
-	local clock = api.type.Clock.new()
-	local entities : {Engine.Entity} = {}
-	local okLoop, loopErr = pcall(function() : boolean
-		api.engine.forEachEntityWithComponent(function(e : Engine.Entity)
-			entities[#entities + 1] = e
-		end, api.type.ComponentType.SIGNAL_LIST)
-		return true
-	end)
-	if not okLoop then
-		log("SIGNAL_LIST loop failed: " .. tostring(loopErr))
-		report.lines[#report.lines + 1] = "Signals: can't loop SIGNAL_LIST (see log)"
-		return {}
-	end
-
-	local networks : {Engine.Entity : Engine.Component.TransportNetwork} = {}
-	local signals : {SignalInfo} = {}
-	local kinds : {integer : integer} = {}
-	local loggedShape = false
-	local listsWithMany = 0
-	for _, e in ipairs(entities) do
-		local list = api.engine.getComponent(e, api.type.ComponentType.SIGNAL_LIST) as Engine.Component.SignalList
-		if list ~= nil then
-			if #list.signals > 1 then
-				listsWithMany = listsWithMany + 1
-			end
-			for i, sig in ipairs(list.signals) do
-				local kind = math.tointeger(sig.type as any as number) or -1
-				kinds[kind] = (kinds[kind] or 0) + 1
-				local edgeId, dir = readEdgePr(sig.edgePr)
-				if not loggedShape then
-					loggedShape = true
-					log("first signal: list=" .. tostring(e) .. " type=" .. tostring(sig.type)
-						.. " edgePr type=" .. type(sig.edgePr) .. " tostring=" .. tostring(sig.edgePr)
-						.. " edgeId=" .. tostring(edgeId) .. " dir=" .. dir)
+	local now = stations[stop.station + 1] and stations[stop.station + 1].terminals[stop.terminal + 1]
+	local number = 0
+	for si, station in ipairs(stations) do
+		for ti, terminal in ipairs(station and station.terminals or {}) do
+			number = number + 1
+			local isCurrent = si - 1 == stop.station and ti - 1 == stop.terminal
+			local sameKind = now == nil
+				or (now.passengersLoad and terminal.passengersLoad)
+				or ((now.cargoLoad or now.cargoUnload) and (terminal.cargoLoad or terminal.cargoUnload))
+			if terminal.vehicleNodeId ~= nil and (isCurrent or sameKind) then
+				info.candidates[#info.candidates + 1] = { station = si - 1, terminal = ti - 1, node = terminal.vehicleNodeId, number = number }
+				if isCurrent then
+					info.current = #info.candidates
 				end
-				local info : SignalInfo = { listEntity = e, index = i - 1, kind = kind, dir = dir }
-				if edgeId ~= nil then
-					info.edgeEntity = edgeId.entity
-					info.edgeIndex = edgeId.index
-					local okGeom, pos = pcall(function() : Vec3f
-						local network = networks[edgeId.entity]
-						if network == nil then
-							network = api.engine.getComponent(edgeId.entity, api.type.ComponentType.TRANSPORT_NETWORK) as Engine.Component.TransportNetwork
-							networks[edgeId.entity] = network
-						end
-						local edge = network and network.edges[edgeId.index + 1]
-						if edge == nil then
-							return nil
-						end
-						return api.engine.util.transport.calcPosition(edge.geometry, 0.5)
-					end)
-					if okGeom and pos ~= nil then
-						info.pos = pos as Vec3f
-						info.posSource = "edge"
-					end
-				end
-				if info.pos == nil then
-					info.pos = centreOf(e)
-					info.posSource = info.pos and "bbox" or "none"
-				end
-				signals[#signals + 1] = info
 			end
 		end
 	end
-
-	local kindText : {string} = {}
-	for k, n in pairs(kinds) do
-		kindText[#kindText + 1] = tostring(k) .. ":" .. tostring(n)
-	end
-	table.sort(kindText)
-	local ms = clock:getTime() / 1000
-	log(string.format("signals: %d lists, %d signals, by type {%s}, %d lists hold >1 signal, %.1f ms",
-		#entities, #signals, table.concat(kindText, ", "), listsWithMany, ms))
-	report.lines[#report.lines + 1] = string.format("Signals: %d (types %s), %.0f ms", #signals, table.concat(kindText, " "), ms)
-	return signals
+	return info
 end
 
-local function nearestTo(pos : Vec3f, signals : {SignalInfo}) : {SignalInfo}
-	local withPos : {SignalInfo} = {}
-	for _, s in ipairs(signals) do
-		if s.pos ~= nil then
-			withPos[#withPos + 1] = s
-		end
-	end
-	table.sort(withPos, function(a : SignalInfo, b : SignalInfo) : boolean
-		return dist2d(a.pos, pos) < dist2d(b.pos, pos)
+local loggedPathError = false
+
+local function trainPath(from : NodeId, to : NodeId) : boolean
+	local ok, path = pcall(function() : {{EdgeId, boolean}}
+		return api.engine.util.pathfinding.findPathNodeToNode({ from }, { to }, { api.type.enum.TransportMode.TRAIN })
 	end)
-	local out : {SignalInfo} = {}
-	for i = 1, math.min(NEAREST_SIGNALS, #withPos) do
-		out[i] = withPos[i]
+	if not ok then
+		if not loggedPathError then
+			loggedPathError = true
+			log("findPathNodeToNode failed: " .. tostring(path))
+		end
+		return false
 	end
-	return out
+	return path ~= nil and #(path as {any}) > 0
 end
 
--- What touches the node where the game's search stopped: its track segments and any signal on their edges.
-local function logNode(label : string, node : NodeId)
+local record Row
+	text : string
+	class : string
+end
+
+local function addRow(rows : {Row}, text : string, class? : string)
+	rows[#rows + 1] = { text = text, class = class or "font-scale-body" }
+end
+
+-- Logged for comparison with our suggestions; the game's own assigner didn't move these stops off terminal 0.
+local function logBestAssignment(lineEntity : Engine.Entity, line : Engine.Component.Line)
 	local ok, err = pcall(function() : boolean
-		local segs = api.engine.system.streetSystem.getNodeTrackSegments(node.entity)
-		log(label .. " node entity=" .. tostring(node.entity) .. " index=" .. tostring(node.index)
-			.. " trackSegments=" .. tostring(segs and #segs or "nil"))
-		for _, seg in ipairs(segs or {}) do
-			local network = api.engine.getComponent(seg, api.type.ComponentType.TRANSPORT_NETWORK) as Engine.Component.TransportNetwork
-			local edgeCount = network and #network.edges or 0
-			local found : {string} = {}
-			for i = 0, edgeCount - 1 do
-				for _, reversed in ipairs({ false, true }) do
-					local okSig, sigId = pcall(function() : SignalId
-						return api.engine.system.signalSystem.getSignal(api.type.EdgeId.new(seg, i), reversed)
-					end)
-					if okSig and sigId ~= nil and (sigId as SignalId).entity ~= nil and (sigId as SignalId).entity >= 0 then
-						found[#found + 1] = string.format("edge%d%s->list %s[%s]", i, reversed and "R" or "F",
-							tostring((sigId as SignalId).entity), tostring((sigId as SignalId).index))
-					end
-				end
-			end
-			log(label .. "   segment " .. tostring(seg) .. " edges=" .. tostring(edgeCount)
-				.. " signals={" .. table.concat(found, ", ") .. "}")
+		local copy = api.type.Line.new(line)
+		local best = api.engine.system.lineSystem.getBestLineAssignment(lineEntity, copy, true)
+		local parts : {string} = {}
+		for i, st in ipairs(best or {}) do
+			parts[#parts + 1] = string.format("%d:%d/%d", i, st.station, st.terminal)
 		end
+		log("game's best assignment (stop:station/terminal): " .. table.concat(parts, " "))
 		return true
 	end)
 	if not ok then
-		log(label .. " node lookup failed: " .. tostring(err))
+		log("getBestLineAssignment failed: " .. tostring(err))
 	end
 end
 
-local function probe(lineEntity : Engine.Entity) : Report
-	local report : Report = { lines = {}, spots = {} }
-	log("==== line " .. tostring(lineEntity) .. " '" .. entityName(lineEntity) .. "'")
-
+local function diagnose(lineEntity : Engine.Entity) : {Row}
+	local rows : {Row} = {}
+	local clock = api.type.Clock.new()
 	local line = api.engine.getComponent(lineEntity, api.type.ComponentType.LINE) as Engine.Component.Line
 	if line == nil then
-		report.lines[#report.lines + 1] = "Not a line"
-		return report
+		return rows
 	end
+	local n = #line.stops
+	log("==== " .. entityName(lineEntity) .. " (" .. tostring(lineEntity) .. "), " .. n .. " stops")
+
+	-- the game's verdict per leg; leg i runs from stop i to stop i % n + 1
+	local gameBroken : {boolean} = {}
+	local entries = 0
+	for __, segment in ipairs(api.engine.util.line.getDetailedLineProblems(lineEntity) or {}) do
+		for __, st in ipairs(segment) do
+			entries = entries + 1
+			gameBroken[entries] = st.noPath == true
+		end
+	end
+	if entries ~= n then
+		log("problem entries " .. entries .. " vs stops " .. n)
+		addRow(rows, _("Rail Doctor can't read this line's problems yet (waypoints?)."))
+		return rows
+	end
+
+	local stops : {StopInfo} = {}
 	for i, stop in ipairs(line.stops) do
-		log(string.format("stop %d: %s station=%d terminal=%d alternatives=%d", i, entityName(stop.stationGroup),
-			stop.station, stop.terminal, stop.alternativeTerminals and #stop.alternativeTerminals or 0))
-	end
-
-	local problems = api.engine.util.line.getDetailedLineProblems(lineEntity)
-	log("detailed problems: " .. tostring(problems and #problems or "nil") .. " segment(s)")
-	local n = 0
-	for si, segment in ipairs(problems or {}) do
-		for k, st in ipairs(segment) do
-			n = n + 1
-			log(string.format("seg %d entry %d (#%d): empty=%s noPath=%s fromAlt=%s toAlt=%s duplicate=%s incompatible=%s",
-				si, k, n, tostring(st.empty), tostring(st.noPath), tostring(st.noPathFromAlternative ~= nil),
-				tostring(st.noPathToAlternative ~= nil), tostring(st.duplicateStop), tostring(st.incompatibleStop)))
-			local locs : {{string, UtilLine.PathProblemLocation}} = {}
-			if st.noPathLocation ~= nil then
-				locs[#locs + 1] = { "noPath", st.noPathLocation }
-			end
-			if st.noPathFromAlternative ~= nil then
-				locs[#locs + 1] = { "fromAlt T" .. tostring(st.noPathFromAlternative[1]), st.noPathFromAlternative[2] }
-			end
-			if st.noPathToAlternative ~= nil then
-				locs[#locs + 1] = { "toAlt T" .. tostring(st.noPathToAlternative[1]), st.noPathToAlternative[2] }
-			end
-			for _, pair in ipairs(locs) do
-				local kind, loc = pair[1] as string, pair[2] as UtilLine.PathProblemLocation
-				if loc ~= nil then
-					local label = string.format("Leg %d %s", n, kind)
-					log(string.format("  %s: pos=%s edgeIndex=%s ok=%s relaxed=%s allowed=%s", label,
-						fmtPos(loc.nodePosition), tostring(loc.edgeIndex), modeKeys(loc.okModes),
-						modeKeys(loc.relaxedModes), modeKeys(loc.allowedModes)))
-					if loc.node ~= nil then
-						logNode("  " .. label, loc.node)
-					end
-					if loc.nodePosition ~= nil then
-						report.spots[#report.spots + 1] = { label = label, pos = loc.nodePosition }
-					end
-				end
-			end
-			if st.noPath and #locs == 0 then
-				report.lines[#report.lines + 1] = string.format("Leg %d: no path, no location given", n)
-			end
+		stops[i] = stopInfo(stop)
+		if stops[i].current == nil then
+			log("stop " .. i .. " " .. stops[i].name .. ": its terminal wasn't found")
+			addRow(rows, fmt(_("Can't find the terminal {station} uses."), { station = stops[i].name }))
+			return rows
 		end
 	end
 
-	local vehicles = api.engine.system.transportVehicleSystem.getLineVehicles(lineEntity)
-	log("vehicles: " .. tostring(vehicles and #vehicles or "nil"))
-	if vehicles ~= nil and #vehicles > 0 then
-		local okFail, fail = pcall(function() : Failure
-			return api.engine.util.line.getFailedPathReason(vehicles[1], lineEntity, true)
-		end)
-		if okFail and fail ~= nil then
-			local f = fail as Failure
-			log("failed path reason (vehicle " .. tostring(vehicles[1]) .. "): reason=" .. tostring(f.reason) .. " pos=" .. fmtPos(f.pos))
-			report.lines[#report.lines + 1] = "Failed path reason: " .. tostring(f.reason)
-			if f.pos ~= nil then
-				report.spots[#report.spots + 1] = { label = "Vehicle fail pos", pos = f.pos }
+	local calls = 0
+	local reach = function(leg : integer, a : integer, b : integer) : boolean
+		calls = calls + 1
+		return trainPath(stops[leg].candidates[a].node, stops[leg % n + 1].candidates[b].node)
+	end
+
+	-- does the pathfinder see what the game sees on the terminals used now?
+	local broken : {integer} = {}
+	local blind = false
+	for i = 1, n do
+		local ours = reach(i, stops[i].current, stops[i % n + 1].current)
+		log(string.format("leg %d %s -> %s: game %s, pathfinder %s", i, stops[i].name, stops[i % n + 1].name,
+			gameBroken[i] and "NO PATH" or "ok", ours and "path" or "no path"))
+		if gameBroken[i] then
+			broken[#broken + 1] = i
+			if ours then
+				blind = true
 			end
+		end
+	end
+	logBestAssignment(lineEntity, line)
+
+	if #broken == 0 then
+		return rows
+	end
+
+	local function legTitle(i : integer) : string
+		local from, to = stops[i], stops[i % n + 1]
+		return fmt(_("Leg {leg}: {from} [{fromTerminal}] → {to} [{toTerminal}]"), {
+			leg = tostring(i),
+			from = from.name, fromTerminal = terminalLabel(from.candidates[from.current]),
+			to = to.name, toTerminal = terminalLabel(to.candidates[to.current]),
+		})
+	end
+
+	if blind then
+		for __, i in ipairs(broken) do
+			addRow(rows, legTitle(i))
+		end
+		addRow(rows, _("The game's pathfinder finds a path here that trains can't use, so Rail Doctor can't suggest terminals."), "font-scale-annotation")
+		return rows
+	end
+
+	local solverStops : {PgraceRailDoctorSuggest.Stop} = {}
+	for i, s in ipairs(stops) do
+		solverStops[i] = { current = s.current, count = #s.candidates }
+	end
+	local fixes = suggest.solve(solverStops, broken, reach)
+	local anyChange = false
+	for __, fix in ipairs(fixes) do
+		addRow(rows, legTitle(fix.leg))
+		if fix.alreadyFixed then
+			addRow(rows, "    " .. _("Fixed by the change above"), "font-scale-annotation")
+		elseif not fix.found then
+			addRow(rows, "    " .. _("No terminals work: the track or its signals block this leg"), "font-scale-annotation")
 		else
-			log("getFailedPathReason failed: " .. tostring(fail))
-		end
-	end
-
-	if #report.spots == 0 then
-		report.lines[#report.lines + 1] = "No problem locations reported"
-	else
-		local signals = collectSignals(report)
-		for _, spot in ipairs(report.spots) do
-			spot.nearest = nearestTo(spot.pos, signals)
-			for _, s in ipairs(spot.nearest) do
-				log(string.format("  near %s: %.0f m list=%s[%d] type=%d dir=%s edge=%s:%s pos=%s (%s)", spot.label,
-					dist2d(s.pos, spot.pos), tostring(s.listEntity), s.index, s.kind, s.dir, tostring(s.edgeEntity),
-					tostring(s.edgeIndex), fmtPos(s.pos), s.posSource))
+			for __, change in ipairs(fix.changes) do
+				anyChange = true
+				local s = stops[change.stop]
+				addRow(rows, "    " .. fmt(_("Use {terminal} at {station}"), {
+					terminal = terminalLabel(s.candidates[change.candidate]), station = s.name,
+				}), "font-scale-annotation")
 			end
 		end
 	end
-	log("==== done")
-	return report
-end
-
-local function focus(pos : Vec3f)
-	api.gui.camera.focusPosition(pos, 250)
-end
-
-local function showButton(text : string, pos : Vec3f) : TreeNodeId
-	return builtin.Button{
-		content = builtin.BoxLayout{
-			children = { builtin.TextView{ meta = { class = "font-scale-annotation" }, text = text } },
-		},
-		onClick = function()
-			focus(pos)
-		end,
-	}
+	if anyChange then
+		addRow(rows, _("Untick \"Assign terminals automatically\" in Manage Line before changing terminals."), "font-scale-annotation")
+	end
+	log(string.format("%d broken legs, %d pathfinder calls, %.1f ms", #broken, calls, clock:getTime() / 1000))
+	return rows
 end
 
 local record BodyParams
@@ -336,27 +227,19 @@ local record BodyParams
 end
 
 local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : BodyParams) : TreeNodeId
-	local state = react.useStateLazy(function() : Report
-		local ok, reportOrError = pcall(function() : Report
-			return probe(params.entityId)
+	local state = react.useStateLazy(function() : {Row}
+		local ok, rowsOrError = pcall(function() : {Row}
+			return diagnose(params.entityId)
 		end)
 		if ok then
-			return reportOrError as Report
+			return rowsOrError as {Row}
 		end
-		log("error: " .. tostring(reportOrError))
-		return { lines = { "Error (see log)" }, spots = {} }
+		log("error: " .. tostring(rowsOrError))
+		return { { text = _("Error (see log)"), class = "font-scale-body" } }
 	end)
-	local report = state:old()
-
 	local children : {TreeNodeId} = {}
-	for _, line in ipairs(report.lines) do
-		children[#children + 1] = builtin.TextView{ meta = { class = "font-scale-body" }, text = line }
-	end
-	for _, spot in ipairs(report.spots) do
-		children[#children + 1] = showButton(spot.label .. " " .. fmtPos(spot.pos), spot.pos)
-		for _, s in ipairs(spot.nearest or {}) do
-			children[#children + 1] = showButton(string.format("    sig type %d, %.0f m", s.kind, dist2d(s.pos, spot.pos)), s.pos)
-		end
+	for __, row in ipairs(state:old()) do
+		children[#children + 1] = builtin.TextView{ meta = { class = row.class }, text = row.text }
 	end
 	return builtin.BoxLayout{ children = children }
 end)
@@ -364,7 +247,7 @@ end)
 local LinePlugin = react.RegisterPluginRecipe(line_eow.LineEowExtensionPoint, "PgraceRailDoctorLinePlugin", function(params : LineEow.LineWidgetPluginParams) : TreeNodeId
 	return builtin.BoxLayout{
 		child = content_card.ContentCard{
-			title = "Rail Doctor (probe)",
+			title = _("Rail Doctor"),
 			initialCalloutTextPermanent = "",
 			recipeAndParamPermanent = content_card.makeRecipeAndParam(Body, { entityId = params.entityId } as BodyParams),
 			gameCtx = params.gameCtx,
@@ -373,8 +256,29 @@ local LinePlugin = react.RegisterPluginRecipe(line_eow.LineEowExtensionPoint, "P
 	}
 end)
 
-debugPrint("[rail_doctor] script loaded")
+-- Shown on rail lines with a leg that has no path. True on error, so the card can report the problem.
+local function hasBrokenRailLeg(params : LineEow.LineWidgetPluginParams) : boolean
+	local ok, result = pcall(function() : boolean
+		if not api.engine.util.line.isLineCompatibleWithCarrier(params.entityId, api.type.enum.Carrier.RAIL, false) then
+			return false
+		end
+		for __, segment in ipairs(api.engine.util.line.getDetailedLineProblems(params.entityId) or {}) do
+			for __, st in ipairs(segment) do
+				if st.noPath then
+					return true
+				end
+			end
+		end
+		return false
+	end)
+	if not ok then
+		log("condition error: " .. tostring(result))
+		return true
+	end
+	return result as boolean
+end
 
 return {
 	LinePlugin = LinePlugin,
+	hasBrokenRailLeg = hasBrokenRailLeg,
 }

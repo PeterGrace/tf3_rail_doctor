@@ -1,1 +1,1 @@
-require "gui.pgrace_rail_doctor.util"
+require "gui.pgrace_rail_doctor.suggest"
