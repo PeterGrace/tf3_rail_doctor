@@ -375,12 +375,11 @@ end
 local record Row
 	text : string
 	class : string
-	pos : Vec3f            -- set: the row is a button that moves the camera here
-	entity : Engine.Entity -- and opens this entity's window
+	pos : Vec3f   -- set: the row is a button that moves the camera here
 end
 
-local function addRow(rows : {Row}, text : string, class? : string, pos? : Vec3f, entity? : Engine.Entity)
-	rows[#rows + 1] = { text = text, class = class or "font-scale-body", pos = pos, entity = entity }
+local function addRow(rows : {Row}, text : string, class? : string, pos? : Vec3f)
+	rows[#rows + 1] = { text = text, class = class or "font-scale-body", pos = pos }
 end
 
 -- Where a signal stands: its own bounding box if it has one, else the middle of its piece of track.
@@ -559,9 +558,14 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 			for __, b in ipairs(blockers) do
 				log(string.format("  blocker: list %s[%d] %s at %.0f m, pos (%.0f, %.0f)", tostring(b.signal.list), b.signal.index,
 					b.signal.typeText, b.distance, b.pos.x, b.pos.y))
-				addRow(rows, "    " .. fmt(_("One-way signal facing the wrong way, {distance} after {station}"), {
-					distance = formatLength(b.distance), station = from.name,
-				}), "font-scale-annotation", signalPosition(b.signal.list, b.pos), b.signal.list)
+				-- the name the game gives the signal ("Signal #4"), as in its window
+				local name = entityName(b.signal.list)
+				local text = (name ~= "?" and name ~= "")
+					and fmt(_("One-way signal ({name}) facing the wrong way, {distance} after {station}"), {
+						name = name, distance = formatLength(b.distance), station = from.name })
+					or fmt(_("One-way signal facing the wrong way, {distance} after {station}"), {
+						distance = formatLength(b.distance), station = from.name })
+				addRow(rows, "    " .. text, "font-scale-annotation", signalPosition(b.signal.list, b.pos))
 			end
 		end
 	end
@@ -594,17 +598,13 @@ local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : Body
 	for __, row in ipairs(state:old()) do
 		local text = builtin.TextView{ meta = { class = row.class }, text = row.text }
 		if row.pos ~= nil then
-			local pos, entity = row.pos, row.entity
+			local pos = row.pos
 			children[#children + 1] = builtin.Button{
 				meta = { tooltip = _("Show on the map") },
 				content = builtin.BoxLayout{ children = { text } },
 				onClick = function()
 					-- as close as the camera goes: it clamps to its own minimum distance
 					api.gui.camera.focusPosition(pos, 10)
-					if entity ~= nil then
-						-- what the base game's clickable names do: opens the signal's own window
-						react.fireEvent(nil, "selectEntity", { entity = entity, stack = true })
-					end
 				end,
 			}
 		else
