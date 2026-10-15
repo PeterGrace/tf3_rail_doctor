@@ -39,6 +39,7 @@ local record StopInfo
 	name : string
 	candidates : {Candidate}
 	current : integer   -- index into candidates
+	byNumber : {integer : Candidate}   -- every terminal with a vehicle node, by the number the game shows
 end
 
 local function terminalLabel(c : Candidate) : string
@@ -47,7 +48,7 @@ end
 
 -- Every terminal in the stop's station group that loads what the stop's terminal loads now.
 local function stopInfo(stop : Engine.Component.Line.Stop) : StopInfo
-	local info : StopInfo = { name = entityName(stop.stationGroup), candidates = {}, current = nil }
+	local info : StopInfo = { name = entityName(stop.stationGroup), candidates = {}, current = nil, byNumber = {} }
 	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP) as Engine.Component.StationGroup
 	if group == nil then
 		return info
@@ -65,8 +66,12 @@ local function stopInfo(stop : Engine.Component.Line.Stop) : StopInfo
 			local sameKind = now == nil
 				or (now.passengersLoad and terminal.passengersLoad)
 				or ((now.cargoLoad or now.cargoUnload) and (terminal.cargoLoad or terminal.cargoUnload))
+			local c : Candidate = { station = si - 1, terminal = ti - 1, node = terminal.vehicleNodeId, number = number }
+			if terminal.vehicleNodeId ~= nil then
+				info.byNumber[number] = c
+			end
 			if terminal.vehicleNodeId ~= nil and (isCurrent or sameKind) then
-				info.candidates[#info.candidates + 1] = { station = si - 1, terminal = ti - 1, node = terminal.vehicleNodeId, number = number }
+				info.candidates[#info.candidates + 1] = c
 				if isCurrent then
 					info.current = #info.candidates
 				end
@@ -653,9 +658,13 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	-- ignores modes, can't. Those stretches take the game's word and stay out of the search.
 	local modeProblem : {integer : {integer : UtilLine.PathProblemLocation}} = {}
 	local hasModeProblem : {integer : boolean} = {}
+	local hasAltProblem : {integer : boolean} = {}   -- an alternative terminal of a stop can't be reached or left
 	for i = 1, n do
 		modeProblem[i] = {}
 		for k, st in ipairs(problems[i]) do
+			if st.noPathFromAlternative ~= nil or st.noPathToAlternative ~= nil then
+				hasAltProblem[i] = true
+			end
 			local loc = st.noPath and st.noPathLocation or nil
 			if loc ~= nil and loc.relaxedModes ~= nil and next(loc.relaxedModes as {any : any}) ~= nil then
 				modeProblem[i][k] = loc
@@ -710,7 +719,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		return rows
 	end
 
-	if #broken == 0 and next(hasModeProblem) == nil then
+	if #broken == 0 and next(hasModeProblem) == nil and next(hasAltProblem) == nil then
 		return rows
 	end
 
@@ -772,12 +781,45 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		end
 	end
 
+	-- An alternative terminal trains can't use: the game names it (a flattened terminal index, 0-based) and says
+	-- whether leaving it or arriving at it fails.
+	local function altRows(i : integer)
+		local ends = currentEnds(i)
+		for k, st in ipairs(problems[i]) do
+			local fromAlt = st.noPathFromAlternative and st.noPathFromAlternative[1]
+			local toAlt = st.noPathToAlternative and st.noPathToAlternative[1]
+			local fromC = (fromAlt ~= nil and k == 1) and stops[i].byNumber[fromAlt + 1] or nil
+			local toC = (toAlt ~= nil and k == #ends - 1) and stops[i % n + 1].byNumber[toAlt + 1] or nil
+			if fromC ~= nil or toC ~= nil then
+				local from : End = fromC and { node = fromC.node.entity, name = ends[k].name } or ends[k]
+				local to : End = toC and { node = toC.node.entity, name = ends[k + 1].name } or ends[k + 1]
+				local text : string
+				if fromC ~= nil and toC ~= nil then
+					text = fmt(_("Trains can't get from {fromTerminal} at {from} to {toTerminal} at {to} (alternatives)"), {
+						fromTerminal = terminalLabel(fromC), from = from.name, toTerminal = terminalLabel(toC), to = to.name })
+				elseif toC ~= nil then
+					text = fmt(_("{terminal} at {station} (an alternative) can't be reached from {from}"), {
+						terminal = terminalLabel(toC), station = to.name, from = from.name })
+				else
+					text = fmt(_("Trains can't leave {terminal} at {station} (an alternative) towards {to}"), {
+						terminal = terminalLabel(fromC), station = from.name, to = to.name })
+				end
+				log(string.format("stretch %d.%d: alternative problem (from %s, to %s)", i, k, tostring(fromAlt), tostring(toAlt)))
+				addRow(rows, 1, _("Either drop the alternative:"), "font-scale-headline")
+				addRow(rows, 2, text, "font-scale-annotation", nodePosition(toC and to.node or from.node),
+					_("Trains use alternatives when the main terminal is busy. Remove it from the stop's alternatives in Manage Line."))
+				reportStretch(rows, track, from, to, v, string.format("stretch %d.%d (alternative)", i, k), 1, true)
+			end
+		end
+	end
+
 	local anyChange = false
 	for i = 1, n do
 		local fix = fixByLeg[i]
-		if fix ~= nil or hasModeProblem[i] then
+		if fix ~= nil or hasModeProblem[i] or hasAltProblem[i] then
 			addRow(rows, 0, legTitle(i))
 			modeRows(i)
+			altRows(i)
 		end
 		if fix == nil then
 			-- nothing more to say about this leg
@@ -898,7 +940,7 @@ local LinePlugin = react.RegisterPluginRecipe(line_eow.LineEowExtensionPoint, "P
 	}
 end)
 
--- Shown on rail lines with a leg that has no path. True on error, so the card can report the problem.
+-- Shown on rail lines with a leg that has no path, or an alternative terminal trains can't use. True on error, so the card can report the problem.
 local function hasBrokenRailLeg(params : LineEow.LineWidgetPluginParams) : boolean
 	local ok, result = pcall(function() : boolean
 		if not api.engine.util.line.isLineCompatibleWithCarrier(params.entityId, api.type.enum.Carrier.RAIL, false) then
@@ -906,7 +948,7 @@ local function hasBrokenRailLeg(params : LineEow.LineWidgetPluginParams) : boole
 		end
 		for __, segment in ipairs(api.engine.util.line.getDetailedLineProblems(params.entityId) or {}) do
 			for __, st in ipairs(segment) do
-				if st.noPath then
+				if st.noPath or st.noPathFromAlternative ~= nil or st.noPathToAlternative ~= nil then
 					return true
 				end
 			end
