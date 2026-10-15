@@ -104,6 +104,7 @@ local record Piece
 	t1 : Vec3f
 	length : number
 	mid : Vec3f
+	edgeCount : integer   -- transport-network edges in the piece (a signal may split it)
 end
 
 local record SignalAt
@@ -160,9 +161,14 @@ local function piece(track : Track, e : Engine.Entity) : Piece
 				return nil
 			end
 			local geom = tn.edges[1].geometry
+			local length = 0.0
+			for __, edge in ipairs(tn.edges) do
+				length = length + edge.geometry.length
+			end
 			return {
 				node0 = be.node0, node1 = be.node1, t0 = be.tangent0, t1 = be.tangent1,
-				length = geom.length, mid = api.engine.util.transport.calcPosition(geom, 0.5),
+				length = length, mid = api.engine.util.transport.calcPosition(geom, 0.5),
+				edgeCount = #tn.edges,
 			}
 		end)
 		p = ok and result as Piece or nil
@@ -187,14 +193,16 @@ local function edgesAt(track : Track, node : Engine.Entity) : {Engine.Entity}
 	return list
 end
 
+-- Signal types come back as plain numbers; 1 is ONE_WAY_SIGNAL in the tealdef's order (SIGNAL, ONE_WAY_SIGNAL,
+-- WAYPOINT). Every signal Express & Local and the test map's wrong-way signals put down read 1.
 local function isOneWay(t : any) : boolean
+	if t == 1 then
+		return true
+	end
 	local ok, yes = pcall(function() : boolean
 		return t == api.type.enum.SignalType.ONE_WAY_PATH_SIGNAL
 	end)
-	if ok and yes then
-		return true
-	end
-	return tostring(t):find("ONE_WAY") ~= nil
+	return (ok and yes) or tostring(t):find("ONE_WAY") ~= nil
 end
 
 local function signalOn(track : Track, edge : Engine.Entity, reversed : boolean) : SignalAt
@@ -205,8 +213,16 @@ local function signalOn(track : Track, edge : Engine.Entity, reversed : boolean)
 	local s = track.signals[key]
 	if s == nil then
 		local ok, result = pcall(function() : SignalAt
-			local id = api.engine.system.signalSystem.getSignal(api.type.EdgeId.new(edge, 0), reversed)
-			if id == nil or id.entity == nil or id.entity < 0 then
+			-- a signal partway along a piece may sit on any of its edges
+			local p = piece(track, edge)
+			local id : SignalId = nil
+			for k = 0, (p and p.edgeCount or 1) - 1 do
+				local candidate = api.engine.system.signalSystem.getSignal(api.type.EdgeId.new(edge, k), reversed)
+				if id == nil and candidate ~= nil and candidate.entity ~= nil and candidate.entity >= 0 then
+					id = candidate
+				end
+			end
+			if id == nil then
 				return nil
 			end
 			local list = api.engine.getComponent(id.entity, api.type.ComponentType.SIGNAL_LIST) as Engine.Component.SignalList
@@ -325,6 +341,34 @@ local function blockersOn(track : Track, result : PgraceRailDoctorRoute.Result, 
 	return out
 end
 
+-- PROBE (remove before release): the route the search took, piece by piece, with every edge's signals.
+local function dumpRoute(track : Track, label : string, result : PgraceRailDoctorRoute.Result)
+	log("route " .. label .. ": " .. #result.keys .. " pieces")
+	for n, key in ipairs(result.keys) do
+		local e, forward = parseKey(key)
+		local p = piece(track, e)
+		local parts : {string} = {}
+		local ok, err = pcall(function() : boolean
+			local tn = api.engine.getComponent(e, api.type.ComponentType.TRANSPORT_NETWORK) as Engine.Component.TransportNetwork
+			for k, edge in ipairs(tn.edges) do
+				local sigs : {string} = {}
+				for __, r in ipairs({ false, true }) do
+					local id = api.engine.system.signalSystem.getSignal(api.type.EdgeId.new(e, k - 1), r)
+					if id ~= nil and id.entity ~= nil and id.entity >= 0 then
+						sigs[#sigs + 1] = (r and "R=" or "F=") .. tostring(id.entity) .. "[" .. tostring(id.index) .. "]"
+					end
+				end
+				parts[#parts + 1] = string.format("e%d %s.%s>%s.%s {%s}", k - 1, tostring(edge.conns[1].entity),
+					tostring(edge.conns[1].index), tostring(edge.conns[2].entity), tostring(edge.conns[2].index),
+					table.concat(sigs, " "))
+			end
+			return true
+		end)
+		log(string.format("  %d %s node0=%s node1=%s len=%.0f %s", n, key, tostring(p and p.node0), tostring(p and p.node1),
+			p and p.length or 0, ok and table.concat(parts, "; ") or ("<" .. tostring(err) .. ">")))
+	end
+end
+
 ---------------------------------------------------------------------------------------------------------------------
 -- The card
 
@@ -421,6 +465,9 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				r.found and "ok" or "NO", r.expanded, pf and "ok" or "NO")
 			if r.found == gameBroken[i] then
 				agree = false
+				if v.name == "A-any" and r.found then
+					dumpRoute(track, "leg " .. i .. " (A-any, game says no path)", r)   -- PROBE
+				end
 			end
 		end
 		log("variant " .. v.name .. (agree and " AGREES: " or " differs: ") .. table.concat(parts, "; "))
