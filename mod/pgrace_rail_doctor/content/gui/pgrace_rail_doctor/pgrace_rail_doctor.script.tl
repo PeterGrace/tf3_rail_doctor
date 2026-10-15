@@ -1135,7 +1135,8 @@ local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
 	if changes > 0 then
 		addRow(rows, 0, _("Change terminals in Manage Line. If a mod assigns terminals automatically, turn that off for this line first."), "font-scale-annotation")
 	else
-		addRow(rows, 0, _("No terminal change shortens it: the direct way may be blocked by a one-way signal or a missing link."), "font-scale-annotation")
+		-- each flagged leg has a shorter way with other terminals, so those terminals must lengthen another leg
+		addRow(rows, 0, _("No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help."), "font-scale-annotation")
 	end
 	return rows
 	end
