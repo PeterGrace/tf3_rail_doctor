@@ -592,7 +592,7 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 				or fmt(_("Wrong-way one-way signal, {distance} after {station}"), values)
 		end
 		addRow(rows, level, text, "font-scale-annotation", signalPosition(b.signal.list, b.pos),
-			_("A one-way signal facing against the train. Turn it round or remove it."))
+			_("A one-way signal facing against the train. Turn it round or remove it, but check first whether it belongs to a station's layout (some station mods use one-way signals on purpose)."))
 	end
 end
 
@@ -794,15 +794,16 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				local from : End = fromC and { node = fromC.node.entity, name = ends[k].name } or ends[k]
 				local to : End = toC and { node = toC.node.entity, name = ends[k + 1].name } or ends[k + 1]
 				local text : string
+				-- the stations are in the leg's title; keep the row short
 				if fromC ~= nil and toC ~= nil then
-					text = fmt(_("Trains can't get from {fromTerminal} at {from} to {toTerminal} at {to} (alternatives)"), {
-						fromTerminal = terminalLabel(fromC), from = from.name, toTerminal = terminalLabel(toC), to = to.name })
+					text = fmt(_("Trains can't get from alternative {fromTerminal} to alternative {toTerminal}"), {
+						fromTerminal = terminalLabel(fromC), toTerminal = terminalLabel(toC) })
 				elseif toC ~= nil then
-					text = fmt(_("{terminal} at {station} (an alternative) can't be reached from {from}"), {
-						terminal = terminalLabel(toC), station = to.name, from = from.name })
+					text = fmt(_("Alternative {terminal} can't be reached from {from}"), {
+						terminal = terminalLabel(toC), from = from.name })
 				else
-					text = fmt(_("Trains can't leave {terminal} at {station} (an alternative) towards {to}"), {
-						terminal = terminalLabel(fromC), station = from.name, to = to.name })
+					text = fmt(_("Trains can't leave alternative {terminal} towards {to}"), {
+						terminal = terminalLabel(fromC), to = to.name })
 				end
 				log(string.format("stretch %d.%d: alternative problem (from %s, to %s)", i, k, tostring(fromAlt), tostring(toAlt)))
 				addRow(rows, 1, _("Either drop the alternative:"), "font-scale-headline")
@@ -817,6 +818,9 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	for i = 1, n do
 		local fix = fixByLeg[i]
 		if fix ~= nil or hasModeProblem[i] or hasAltProblem[i] then
+			if #rows > 0 then
+				addRow(rows, 0, " ", "font-scale-annotation")   -- a small gap between legs
+			end
 			addRow(rows, 0, legTitle(i))
 			modeRows(i)
 			altRows(i)
