@@ -1296,7 +1296,10 @@ local LinePlugin = react.RegisterPluginRecipe(line_eow.LineEowExtensionPoint, "P
 		return isBroken(params.entityId)
 	end)
 	if not broken:old() then
-		return DetourCard{ entityId = params.entityId, gameCtx = params.gameCtx, showOnRightSide = params.showCalloutOnRightSide }
+		-- a recipe must return a layout, never another recipe's node directly
+		return builtin.BoxLayout{
+			child = DetourCard{ entityId = params.entityId, gameCtx = params.gameCtx, showOnRightSide = params.showCalloutOnRightSide },
+		}
 	end
 	return builtin.BoxLayout{
 		child = content_card.ContentCard{
