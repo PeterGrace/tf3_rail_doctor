@@ -487,7 +487,10 @@ end
 
 local function addRow(rows : {Row}, level : integer, text : string, class? : string, pos? : Vec3f, tooltip? : string,
 		zoom? : number)
-	rows[#rows + 1] = { level = level, text = text, class = class or "font-scale-body", pos = pos, tooltip = tooltip,
+	-- Copy the position now: some come straight from engine data (a problem report, a node, a track piece), which
+	-- the game rebuilds when the line changes (a rename was enough), and a kept reference then reads (0, 0, 0).
+	local copy = pos ~= nil and api.type.Vec3f.new(pos.x, pos.y, pos.z) or nil
+	rows[#rows + 1] = { level = level, text = text, class = class or "font-scale-body", pos = copy, tooltip = tooltip,
 		zoom = zoom }
 end
 
