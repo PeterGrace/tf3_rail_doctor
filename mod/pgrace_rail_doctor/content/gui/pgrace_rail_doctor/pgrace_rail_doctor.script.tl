@@ -897,6 +897,7 @@ end
 
 local DETOUR_FRAME_US = 6000      -- work per frame before yielding to the game
 local DETOUR_TOTAL_US = 3000000   -- total work before giving up (spread over many frames)
+local DETOUR_ZOOM = 400           -- a detour's pin: far enough out to see the loop the trains run round
 
 -- Track steps with lengths (the length of the piece entered), one-way signals as walls.
 local function weightedStepsFrom(track : Track, node : Engine.Entity, fromEdge : Engine.Entity, arriving : Vec3f) : {PgraceRailDoctorRoute.Weighted}
@@ -908,8 +909,9 @@ local function weightedStepsFrom(track : Track, node : Engine.Entity, fromEdge :
 	return out
 end
 
--- Shortest lengths from one end to each of several ends: goal index -> metres; unreachable ones are missing.
-local function lengthsFrom(track : Track, from : End, goals : {End}, pause : function()) : {integer : number}
+-- Shortest lengths from one end to each of several ends: goal index -> metres, and goal index -> the route's states;
+-- unreachable ones are missing.
+local function lengthsFrom(track : Track, from : End, goals : {End}, pause : function()) : {integer : number}, {integer : {string}}
 	local starts : {PgraceRailDoctorRoute.Weighted} = {}
 	if from.node ~= nil then
 		starts = weightedStepsFrom(track, from.node, nil, nil)
@@ -943,10 +945,43 @@ local function lengthsFrom(track : Track, from : End, goals : {End}, pause : fun
 		end,
 		MAX_EXPANDED)
 	local out : {integer : number} = {}
+	local paths : {integer : {string}} = {}
 	for id, length in pairs(r.found) do
 		out[math.floor(tonumber(id))] = length
+		paths[math.floor(tonumber(id))] = r.paths[id]
+	end
+	return out, paths
+end
+
+-- Joins route pieces end to end (a waypoint's state ends one piece and starts the next, so it may repeat).
+local function joinPaths(parts : {{string}}) : {string}
+	local out : {string} = {}
+	for __, part in ipairs(parts) do
+		for __, key in ipairs(part) do
+			out[#out + 1] = key
+		end
 	end
 	return out
+end
+
+-- Where the long route strays furthest from the short one: the middle of that piece of track.
+local function farthestPoint(track : Track, long : {string}, short : {string}) : Vec3f
+	local function points(keys : {string}) : {PgraceRailDoctorDetour.Point}, {Vec3f}
+		local out : {PgraceRailDoctorDetour.Point} = {}
+		local mids : {Vec3f} = {}
+		for __, key in ipairs(keys or {}) do
+			local p = piece(track, (parseKey(key)))
+			if p ~= nil and p.mid ~= nil then
+				out[#out + 1] = { x = p.mid.x, y = p.mid.y }
+				mids[#mids + 1] = p.mid
+			end
+		end
+		return out, mids
+	end
+	local longPoints, longMids = points(long)
+	local shortPoints = points(short)
+	local i = detour.farthest(longPoints, shortPoints)
+	return i and longMids[i]
 end
 
 -- The detour check as a job: tasks (one shortest-path search each) to run a few per frame, then finish() builds the
@@ -987,8 +1022,9 @@ local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
 	end
 	local function noPause() end
 
-	-- legLength[i][a][b]: stop i on terminal a to stop i + 1 on terminal b, waypoints included
+	-- legLength[i][a][b]: stop i on terminal a to stop i + 1 on terminal b, waypoints included; legPath the route
 	local legLength : {integer : {integer : {integer : number}}} = {}
+	local legPath : {integer : {integer : {integer : {string}}}} = {}
 	for i = 1, n do
 		local j = i % n + 1
 		local nextEnds : {End} = {}
@@ -996,33 +1032,40 @@ local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
 			nextEnds[c] = stopEnd(j, c)
 		end
 		legLength[i] = {}
+		legPath[i] = {}
 		local wps = waypoints[i]
 		if #wps == 0 then
 			for a = 1, counts[i] do
 				table.insert(job.tasks, function()
-					legLength[i][a] = lengthsFrom(track, stopEnd(i, a), nextEnds, noPause)
+					legLength[i][a], legPath[i][a] = lengthsFrom(track, stopEnd(i, a), nextEnds, noPause)
 				end)
 			end
 		else
 			local middle : number = 0
+			local middlePaths : {{string}} = {}
 			local last : {integer : number} = {}
+			local lastPaths : {integer : {string}} = {}
 			for k = 1, #wps - 1 do
 				table.insert(job.tasks, function()
-					local d = lengthsFrom(track, wps[k], { wps[k + 1] }, noPause)[1]
-					middle = (middle ~= nil and d ~= nil) and middle + d or nil
+					local d, paths = lengthsFrom(track, wps[k], { wps[k + 1] }, noPause)
+					middle = (middle ~= nil and d[1] ~= nil) and middle + d[1] or nil
+					middlePaths[#middlePaths + 1] = paths[1] or {}
 				end)
 			end
 			table.insert(job.tasks, function()
-				last = lengthsFrom(track, wps[#wps], nextEnds, noPause)
+				last, lastPaths = lengthsFrom(track, wps[#wps], nextEnds, noPause)
 			end)
 			for a = 1, counts[i] do
 				-- runs after the tasks above, so middle and last are known
 				table.insert(job.tasks, function()
-					local first = lengthsFrom(track, stopEnd(i, a), { wps[1] }, noPause)[1]
+					local d, paths = lengthsFrom(track, stopEnd(i, a), { wps[1] }, noPause)
+					local first = d[1]
 					legLength[i][a] = {}
+					legPath[i][a] = {}
 					for b = 1, counts[j] do
 						if first ~= nil and middle ~= nil and last[b] ~= nil then
 							legLength[i][a][b] = first + middle + last[b]
+							legPath[i][a][b] = joinPaths({ paths[1], joinPaths(middlePaths), lastPaths[b] })
 						end
 					end
 				end)
@@ -1044,16 +1087,22 @@ local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
 		return dist(leg, stops[leg].current, stops[leg % n + 1].current)
 	end
 
+	local function pathOf(leg : integer, a : integer, b : integer) : {string}
+		return legPath[leg][a] and legPath[leg][a][b]
+	end
+
 	local flagged : {integer : {number, number}} = {}
+	local pins : {integer : Vec3f} = {}
 	local any = false
 	local parts : {string} = {}
 	for i = 1, n do
 		local shortest = math.huge
+		local bestA, bestB = 0, 0
 		for a = 1, counts[i] do
 			for b = 1, counts[i % n + 1] do
 				local d = dist(i, a, b)
 				if d ~= nil and d < shortest then
-					shortest = d
+					shortest, bestA, bestB = d, a, b
 				end
 			end
 		end
@@ -1062,6 +1111,10 @@ local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
 		parts[#parts + 1] = string.format("leg %d %s/%s m", i, tostring(actual and math.floor(actual)), tostring(legBest and math.floor(legBest)))
 		if detour.isDetour(actual, legBest) then
 			flagged[i] = { actual, legBest }
+			pins[i] = farthestPoint(track, pathOf(i, stops[i].current, stops[i % n + 1].current), pathOf(i, bestA, bestB))
+			if pins[i] ~= nil then
+				log(string.format("detours: leg %d strays furthest at (%.0f, %.0f)", i, pins[i].x, pins[i].y))
+			end
 			any = true
 		end
 	end
@@ -1081,6 +1134,10 @@ local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
 			addRow(rows, 1, fmt(_("Trains go the long way round: {actual} instead of {best}"), {
 				actual = formatLength(f[1]), best = formatLength(f[2]),
 			}), "font-scale-annotation")
+			if pins[i] ~= nil then
+				addRow(rows, 1, _("The long way round goes out to here"), "font-scale-annotation", pins[i],
+					_("Shows where the trains' way strays furthest from the shortest way."), DETOUR_ZOOM)
+			end
 		end
 	end
 
