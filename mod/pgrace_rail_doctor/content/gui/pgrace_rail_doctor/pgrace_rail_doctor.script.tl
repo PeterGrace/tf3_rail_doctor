@@ -973,12 +973,18 @@ local function logTrainPaths(lineEntity : Engine.Entity, n : integer, actualOf :
 	end)
 end
 
--- The whole check; yields through pause() when run as a coroutine. Returns the card's rows (empty: nothing to say).
-local function detourCheck(lineEntity : Engine.Entity, pause : function(), track : Track) : {Row}
-	local rows : {Row} = {}
+-- The detour check as a job: tasks (one shortest-path search each) to run a few per frame, then finish() builds the
+-- card's rows. Coroutines can't be used: an engine call inside one fails ("Value is not a string, but a thread").
+local record DetourJob
+	tasks : {function()}
+	finish : function() : {Row}
+end
+
+local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
+	local job : DetourJob = { tasks = {}, finish = function() : {Row} return {} end }
 	local line = api.engine.getComponent(lineEntity, api.type.ComponentType.LINE) as Engine.Component.Line
 	if line == nil or #line.stops < 2 then
-		return rows
+		return job
 	end
 	local n = #line.stops
 	local clock = api.type.Clock.new()
@@ -987,7 +993,7 @@ local function detourCheck(lineEntity : Engine.Entity, pause : function(), track
 	for i, stop in ipairs(line.stops) do
 		stops[i] = stopInfo(stop)
 		if stops[i].current == nil or #stops[i].candidates == 0 then
-			return rows
+			return job
 		end
 		counts[i] = #stops[i].candidates
 	end
@@ -1003,6 +1009,7 @@ local function detourCheck(lineEntity : Engine.Entity, pause : function(), track
 	local function stopEnd(i : integer, c : integer) : End
 		return { node = stops[i].candidates[c].node.entity, name = stops[i].name }
 	end
+	local function noPause() end
 
 	-- legLength[i][a][b]: stop i on terminal a to stop i + 1 on terminal b, waypoints included
 	local legLength : {integer : {integer : {integer : number}}} = {}
@@ -1016,33 +1023,46 @@ local function detourCheck(lineEntity : Engine.Entity, pause : function(), track
 		local wps = waypoints[i]
 		if #wps == 0 then
 			for a = 1, counts[i] do
-				legLength[i][a] = lengthsFrom(track, stopEnd(i, a), nextEnds, pause)
+				table.insert(job.tasks, function()
+					legLength[i][a] = lengthsFrom(track, stopEnd(i, a), nextEnds, noPause)
+				end)
 			end
 		else
 			local middle : number = 0
+			local last : {integer : number} = {}
 			for k = 1, #wps - 1 do
-				local d = lengthsFrom(track, wps[k], { wps[k + 1] }, pause)[1]
-				middle = (middle ~= nil and d ~= nil) and middle + d or nil
+				table.insert(job.tasks, function()
+					local d = lengthsFrom(track, wps[k], { wps[k + 1] }, noPause)[1]
+					middle = (middle ~= nil and d ~= nil) and middle + d or nil
+				end)
 			end
-			local last = lengthsFrom(track, wps[#wps], nextEnds, pause)
+			table.insert(job.tasks, function()
+				last = lengthsFrom(track, wps[#wps], nextEnds, noPause)
+			end)
 			for a = 1, counts[i] do
-				local first = lengthsFrom(track, stopEnd(i, a), { wps[1] }, pause)[1]
-				legLength[i][a] = {}
-				for b = 1, counts[j] do
-					if first ~= nil and middle ~= nil and last[b] ~= nil then
-						legLength[i][a][b] = first + middle + last[b]
+				-- runs after the tasks above, so middle and last are known
+				table.insert(job.tasks, function()
+					local first = lengthsFrom(track, stopEnd(i, a), { wps[1] }, noPause)[1]
+					legLength[i][a] = {}
+					for b = 1, counts[j] do
+						if first ~= nil and middle ~= nil and last[b] ~= nil then
+							legLength[i][a][b] = first + middle + last[b]
+						end
 					end
-				end
+				end)
 			end
 		end
 	end
+
+	job.finish = function() : {Row}
+	local rows : {Row} = {}
 	if track.timedOut then
 		log(string.format("detours: %s ran out of time", entityName(lineEntity)))
 		return rows
 	end
 
 	local function dist(leg : integer, a : integer, b : integer) : number
-		return legLength[leg][a][b]
+		return legLength[leg][a] and legLength[leg][a][b]
 	end
 	local function actualOf(leg : integer) : number
 		return dist(leg, stops[leg].current, stops[leg % n + 1].current)
@@ -1070,8 +1090,8 @@ local function detourCheck(lineEntity : Engine.Entity, pause : function(), track
 			any = true
 		end
 	end
-	log(string.format("detours: %s: %s (actual/best), %.0f ms of work", entityName(lineEntity), table.concat(parts, "; "),
-		clock:getTime() / 1000))
+	log(string.format("detours: %s: %s (actual/best), %d searches, %.0f ms in all (spread over frames)", entityName(lineEntity),
+		table.concat(parts, "; "), #job.tasks, clock:getTime() / 1000))
 	if not any then
 		return rows
 	end
@@ -1118,6 +1138,8 @@ local function detourCheck(lineEntity : Engine.Entity, pause : function(), track
 		addRow(rows, 0, _("No terminal change shortens it: the direct way may be blocked by a one-way signal or a missing link."), "font-scale-annotation")
 	end
 	return rows
+	end
+	return job
 end
 
 local record BodyParams
@@ -1201,13 +1223,16 @@ local record DetourParams
 	showOnRightSide : boolean
 end
 
--- Runs the detour check a few milliseconds per frame (a coroutine resumed from a join), and shows a card only if it
--- found a detour.
+-- Runs the detour check a few milliseconds per frame (tasks run from a join), and shows a card only if it found a
+-- detour.
 local DetourCard = react.RegisterRecipe("PgraceRailDoctorDetours", function(params : DetourParams) : TreeNodeId
 	local rowsState : ReactStateT<{Row}> = react.useState(nil)
-	local jobRef : ReactRefT<thread> = react.useRef(nil)
+	local jobRef : ReactRefT<DetourJob> = react.useRef(nil)
+	local nextRef : ReactRefT<integer> = react.useRef(1)
+	local workRef : ReactRefT<number> = react.useRef(0)
 	local doneRef : ReactRefT<boolean> = react.useRef(false)
 	local queuedRef : ReactRefT<boolean> = react.useRef(false)
+	local trackRef : ReactRefT<Track> = react.useRef(nil)
 	react.onStep(function()
 		if doneRef:get() or queuedRef:get() then
 			return
@@ -1218,46 +1243,34 @@ local DetourCard = react.RegisterRecipe("PgraceRailDoctorDetours", function(para
 			if doneRef:get() then
 				return
 			end
-			local hasCoroutines = coroutine ~= nil and coroutine.create ~= nil
-			if not hasCoroutines then
-				-- no coroutines: one go, within the broken-line check's budget
-				doneRef:set(true)
-				local track = newTrack()
-				rowsState:set(detourCheck(params.entityId, function()
-					if track.clock:getTime() > BUDGET_US then
-						track.timedOut = true
-					end
-				end, track))
-				return
-			end
-			local co = jobRef:get()
-			if co == nil then
-				local track = newTrack()
+			local ok, err = pcall(function() : boolean
 				local frame = api.type.Clock.new()
-				local work = 0.0
-				co = coroutine.create(function() : {Row}
-					return detourCheck(params.entityId, function()
-						local spent = frame:getTime()
-						if spent > DETOUR_FRAME_US then
-							work = work + spent
-							if work > DETOUR_TOTAL_US then
-								track.timedOut = true
-								return
-							end
-							coroutine.yield()
-							frame = api.type.Clock.new()
-						end
-					end, track)
-				end)
-				jobRef:set(co)
-			end
-			local ok, result = coroutine.resume(co)
+				local job = jobRef:get()
+				if job == nil then
+					trackRef:set(newTrack())
+					job = detourJob(params.entityId, trackRef:get())
+					jobRef:set(job)
+				end
+				local track = trackRef:get()
+				local i = nextRef:get()
+				while i <= #job.tasks and frame:getTime() < DETOUR_FRAME_US and not track.timedOut do
+					job.tasks[i]()
+					i = i + 1
+				end
+				nextRef:set(i)
+				workRef:set(workRef:get() + frame:getTime())
+				if workRef:get() > DETOUR_TOTAL_US then
+					track.timedOut = true
+				end
+				if i > #job.tasks or track.timedOut then
+					doneRef:set(true)
+					rowsState:set(job.finish() or {})
+				end
+				return true
+			end)
 			if not ok then
 				doneRef:set(true)
-				log("detours error: " .. tostring(result))
-			elseif coroutine.status(co) == "dead" then
-				doneRef:set(true)
-				rowsState:set((result as {Row}) or {})
+				log("detours error: " .. tostring(err))
 			end
 		end, "PgraceRailDoctorDetours")
 	end)
