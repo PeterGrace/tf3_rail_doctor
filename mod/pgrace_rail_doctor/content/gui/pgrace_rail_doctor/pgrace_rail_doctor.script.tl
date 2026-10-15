@@ -2,6 +2,7 @@ local react = ug_require "::/gui/main/react.lua" as React
 local builtin = ug_require "::/gui/main/builtin.lua" as Builtin
 local content_card = ug_require "::/gui/main/content_card.tl" as ContentCard
 local line_eow = ug_require "::/gui/entity_window/line/line_eow.script.tl" as LineEow
+local line_util = ug_require "::/gui/line_vehicle_mgmt/line_util.tl" as LineUtil
 local suggest = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/suggest.tl" as PgraceRailDoctorSuggest
 local route = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/route.tl" as PgraceRailDoctorRoute
 
@@ -648,10 +649,25 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		return legEnds(i, stops[i].current, stops[i % n + 1].current)
 	end
 
+	-- Transport-mode problems (no catenary, no tram track): the game says what and where, and our search, which
+	-- ignores modes, can't. Those stretches take the game's word and stay out of the search.
+	local modeProblem : {integer : {integer : UtilLine.PathProblemLocation}} = {}
+	local hasModeProblem : {integer : boolean} = {}
+	for i = 1, n do
+		modeProblem[i] = {}
+		for k, st in ipairs(problems[i]) do
+			local loc = st.noPath and st.noPathLocation or nil
+			if loc ~= nil and loc.relaxedModes ~= nil and next(loc.relaxedModes as {any : any}) ~= nil then
+				modeProblem[i][k] = loc
+				hasModeProblem[i] = true
+			end
+		end
+	end
+
 	local broken : {integer} = {}
 	for i = 1, n do
-		for __, st in ipairs(problems[i]) do
-			if st.noPath then
+		for k, st in ipairs(problems[i]) do
+			if st.noPath and modeProblem[i][k] == nil then
 				broken[#broken + 1] = i
 				break
 			end
@@ -666,13 +682,17 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	for i = 1, n do
 		local ends = currentEnds(i)
 		for k = 1, #ends - 1 do
-			local r = searchBetween(track, ends[k], ends[k + 1], v, true)
-			local gameNo = problems[i][k].noPath == true
-			parts[#parts + 1] = string.format("%d.%d game=%s ours=%s(%d)", i, k, gameNo and "NO" or "ok", r.found and "ok" or "NO", r.expanded)
-			if r.found == gameNo then
-				agree = false
-				if r.found then
-					dumpRoute(track, string.format("stretch %d.%d (game says no path)", i, k), r)   -- PROBE
+			if modeProblem[i][k] ~= nil then
+				parts[#parts + 1] = string.format("%d.%d game=NO (modes)", i, k)
+			else
+				local r = searchBetween(track, ends[k], ends[k + 1], v, true)
+				local gameNo = problems[i][k].noPath == true
+				parts[#parts + 1] = string.format("%d.%d game=%s ours=%s(%d)", i, k, gameNo and "NO" or "ok", r.found and "ok" or "NO", r.expanded)
+				if r.found == gameNo then
+					agree = false
+					if r.found then
+						dumpRoute(track, string.format("stretch %d.%d (game says no path)", i, k), r)   -- PROBE
+					end
 				end
 			end
 		end
@@ -690,7 +710,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		return rows
 	end
 
-	if #broken == 0 then
+	if #broken == 0 and next(hasModeProblem) == nil then
 		return rows
 	end
 
@@ -699,7 +719,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		return fmt(_("Leg {leg}: {from} → {to}"), { leg = tostring(i), from = from.name, to = to.name })
 	end
 
-	if not agree then
+	if not agree and #broken > 0 then
 		for __, i in ipairs(broken) do
 			addRow(rows, 0, legTitle(i))
 		end
@@ -726,10 +746,42 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		solverStops[i] = { current = s.current, count = #s.candidates }
 	end
 	local fixes = suggest.solve(solverStops, broken, reach)
-	local anyChange = false
+	local fixByLeg : {integer : PgraceRailDoctorSuggest.Fix} = {}
 	for __, fix in ipairs(fixes) do
-		addRow(rows, 0, legTitle(fix.leg))
-		if fix.alreadyFixed then
+		fixByLeg[fix.leg] = fix
+	end
+
+	-- the game's own finding for a transport-mode problem, in its own words ("Missing catenaries")
+	local function modeRows(i : integer)
+		local ends = currentEnds(i)
+		for k = 1, #ends - 1 do
+			local loc = modeProblem[i][k]
+			if loc ~= nil then
+				local ok, reason = pcall(function() : string
+					return line_util.getRelaxationText(line_util.getRelaxationType(loc.okModes, loc.relaxedModes, loc.allowedModes))
+				end)
+				local text = (ok and reason ~= nil) and reason as string or _("The track here doesn't suit this line's trains")
+				if #ends > 2 then
+					text = fmt(_("{reason} ({from} → {to})"), { reason = text, from = ends[k].name, to = ends[k + 1].name })
+				end
+				log(string.format("stretch %d.%d: mode problem at %s", i, k, loc.nodePosition and
+					string.format("(%.0f, %.0f)", loc.nodePosition.x, loc.nodePosition.y) or "?"))
+				addRow(rows, 1, text, "font-scale-annotation", loc.nodePosition,
+					_("Where the game's own check stops: the last piece of track this line's trains can use."))
+			end
+		end
+	end
+
+	local anyChange = false
+	for i = 1, n do
+		local fix = fixByLeg[i]
+		if fix ~= nil or hasModeProblem[i] then
+			addRow(rows, 0, legTitle(i))
+			modeRows(i)
+		end
+		if fix == nil then
+			-- nothing more to say about this leg
+		elseif fix.alreadyFixed then
 			addRow(rows, 1, _("Fixed by the change above"), "font-scale-annotation")
 		elseif fix.found then
 			for __, change in ipairs(fix.changes) do
@@ -741,11 +793,10 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				}), "font-scale-annotation")
 			end
 		else
-			local i = fix.leg
 			local ends = currentEnds(i)
 			local asked : {End : boolean} = {}
 			for k = 1, #ends - 1 do
-				if problems[i][k].noPath then
+				if problems[i][k].noPath and modeProblem[i][k] == nil then
 					-- a waypoint on the wrong track is the likeliest cause: ask about it first, once
 					local wp = ends[k + 1].piece ~= nil and ends[k + 1] or (ends[k].piece ~= nil and ends[k] or nil)
 					local level, orChange, inOr = 1, false, false
