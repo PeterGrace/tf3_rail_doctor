@@ -43,7 +43,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} nach {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint} ist von {from} aus nicht erreichbar",
-  "Shows the platform track of the suggested terminal.": "Zeigt das Bahnsteiggleis des vorgeschlagenen Terminals."
+  "Shows the platform track of the suggested terminal.": "Zeigt das Bahnsteiggleis des vorgeschlagenen Terminals.",
+  "Trains go the long way round: {actual} instead of {best}": "Züge nehmen einen Umweg: {actual} statt {best}",
+  "To shorten the line ({from} → {to} in all):": "So wird die Linie kürzer ({from} → {to} insgesamt):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Kein Terminalwechsel hilft: Die Terminals, die hier einen Abschnitt verkürzen, verlängern einen anderen. Gleisänderungen, etwa ein Gleiswechsel, können helfen."
  },
  "es": {
   "(The only other way runs against {count} one-way signals.)|one": "(La única otra ruta va contra {count} señal de sentido único.)",
@@ -85,7 +88,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} después de {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "No se puede llegar a {waypoint} desde {from}",
-  "Shows the platform track of the suggested terminal.": "Muestra la vía de andén de la terminal sugerida."
+  "Shows the platform track of the suggested terminal.": "Muestra la vía de andén de la terminal sugerida.",
+  "Trains go the long way round: {actual} instead of {best}": "Los trenes dan un rodeo: {actual} en vez de {best}",
+  "To shorten the line ({from} → {to} in all):": "Para acortar la línea ({from} → {to} en total):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Ningún cambio de terminal sirve: las terminales que acortan aquí un tramo alargan otro. Cambiar las vías, por ejemplo con un escape, puede ayudar."
  },
  "fr": {
   "(The only other way runs against {count} one-way signals.)|one": "(Le seul autre chemin passe contre {count} signal à sens unique.)",
@@ -127,7 +133,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} après {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint} est inaccessible depuis {from}",
-  "Shows the platform track of the suggested terminal.": "Montre la voie à quai du terminal proposé."
+  "Shows the platform track of the suggested terminal.": "Montre la voie à quai du terminal proposé.",
+  "Trains go the long way round: {actual} instead of {best}": "Les trains font un détour : {actual} au lieu de {best}",
+  "To shorten the line ({from} → {to} in all):": "Pour raccourcir la ligne ({from} → {to} au total) :",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Aucun changement de terminal n'aide : les terminaux qui raccourcissent ici un tronçon en allongent un autre. Modifier les voies, par exemple avec une communication, peut aider."
  },
  "it": {
   "(The only other way runs against {count} one-way signals.)|one": "(L'unico altro percorso va contro {count} segnale a senso unico.)",
@@ -169,7 +178,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} dopo {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint} non è raggiungibile da {from}",
-  "Shows the platform track of the suggested terminal.": "Mostra il binario del terminal suggerito."
+  "Shows the platform track of the suggested terminal.": "Mostra il binario del terminal suggerito.",
+  "Trains go the long way round: {actual} instead of {best}": "I treni fanno il giro lungo: {actual} invece di {best}",
+  "To shorten the line ({from} → {to} in all):": "Per accorciare la linea ({from} → {to} in totale):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Nessun cambio di terminal aiuta: i terminal che qui accorciano una tratta ne allungano un'altra. Modifiche ai binari, come una comunicazione, possono aiutare."
  },
  "ja": {
   "(The only other way runs against {count} one-way signals.)|other": "（ほかの経路は一方通行信号{count}基に逆らって進みます。）",
@@ -210,7 +222,10 @@
   "{name}, {distance} after {station}": "{name}、{station}から{distance}",
   "{reason} ({from} → {to})": "{reason}（{from} → {to}）",
   "{waypoint} can't be reached from {from}": "{waypoint}へは{from}から到達できません",
-  "Shows the platform track of the suggested terminal.": "提案されたターミナルのホームの線路を表示します。"
+  "Shows the platform track of the suggested terminal.": "提案されたターミナルのホームの線路を表示します。",
+  "Trains go the long way round: {actual} instead of {best}": "列車が遠回りしています：{best}で済むところ{actual}",
+  "To shorten the line ({from} → {to} in all):": "路線を短くするには（全体で{from} → {to}）：",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "ターミナルの変更では改善しません：この区間を短くするターミナルにすると別の区間が長くなります。渡り線などの線路の変更が有効な場合があります。"
  },
  "ko": {
   "(The only other way runs against {count} one-way signals.)|other": "(다른 유일한 경로는 일방통행 신호기 {count}개를 거슬러 갑니다.)",
@@ -251,7 +266,10 @@
   "{name}, {distance} after {station}": "{name}, {station}에서 {distance}",
   "{reason} ({from} → {to})": "{reason}({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint}에 {from}에서 갈 수 없습니다",
-  "Shows the platform track of the suggested terminal.": "제안된 터미널의 승강장 선로를 보여 줍니다."
+  "Shows the platform track of the suggested terminal.": "제안된 터미널의 승강장 선로를 보여 줍니다.",
+  "Trains go the long way round: {actual} instead of {best}": "열차가 먼 길로 돌아갑니다: {best} 대신 {actual}",
+  "To shorten the line ({from} → {to} in all):": "노선을 줄이려면(전체 {from} → {to}):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "터미널을 바꿔도 나아지지 않습니다: 여기서 구간을 줄이는 터미널은 다른 구간을 늘립니다. 건넘선 같은 선로 변경이 도움이 될 수 있습니다."
  },
  "nl": {
   "(The only other way runs against {count} one-way signals.)|one": "(De enige andere route gaat tegen {count} eenrichtingssein in.)",
@@ -293,7 +311,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} na {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint} is niet bereikbaar vanaf {from}",
-  "Shows the platform track of the suggested terminal.": "Toont het perronspoor van de voorgestelde terminal."
+  "Shows the platform track of the suggested terminal.": "Toont het perronspoor van de voorgestelde terminal.",
+  "Trains go the long way round: {actual} instead of {best}": "Treinen rijden om: {actual} in plaats van {best}",
+  "To shorten the line ({from} → {to} in all):": "Om de lijn korter te maken ({from} → {to} in totaal):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Geen terminalwissel helpt: de terminals die hier een traject korter maken, maken een ander langer. Spoorwijzigingen, zoals een overloopwissel, kunnen helpen."
  },
  "pl": {
   "(The only other way runs against {count} one-way signals.)|one": "(Jedyna inna droga prowadzi wbrew {count} sygnalizatorowi jednokierunkowemu.)",
@@ -336,7 +357,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} za {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint} jest nieosiągalny z {from}",
-  "Shows the platform track of the suggested terminal.": "Pokazuje tor peronowy proponowanego terminalu."
+  "Shows the platform track of the suggested terminal.": "Pokazuje tor peronowy proponowanego terminalu.",
+  "Trains go the long way round: {actual} instead of {best}": "Pociągi jadą okrężną drogą: {actual} zamiast {best}",
+  "To shorten the line ({from} → {to} in all):": "Aby skrócić linię (łącznie {from} → {to}):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Żadna zmiana terminali nie pomoże: terminale, które skracają tu odcinek, wydłużają inny. Mogą pomóc zmiany torów, np. przejazd międzytorowy."
  },
  "pt_BR": {
   "(The only other way runs against {count} one-way signals.)|one": "(O único outro caminho vai contra {count} sinal de sentido único.)",
@@ -378,7 +402,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} depois de {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint} não pode ser alcançado a partir de {from}",
-  "Shows the platform track of the suggested terminal.": "Mostra a via da plataforma do terminal sugerido."
+  "Shows the platform track of the suggested terminal.": "Mostra a via da plataforma do terminal sugerido.",
+  "Trains go the long way round: {actual} instead of {best}": "Os trens fazem um desvio: {actual} em vez de {best}",
+  "To shorten the line ({from} → {to} in all):": "Para encurtar a linha ({from} → {to} no total):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Nenhuma troca de terminal ajuda: os terminais que encurtam um trecho aqui alongam outro. Mudanças nos trilhos, como um travessão, podem ajudar."
  },
  "ru": {
   "(The only other way runs against {count} one-way signals.)|one": "(Единственный другой путь идёт против {count} одностороннего семафора.)",
@@ -421,7 +448,10 @@
   "{name}, {distance} after {station}": "{name}, {distance} после {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
   "{waypoint} can't be reached from {from}": "{waypoint} недоступна из {from}",
-  "Shows the platform track of the suggested terminal.": "Показывает путь у платформы предложенного терминала."
+  "Shows the platform track of the suggested terminal.": "Показывает путь у платформы предложенного терминала.",
+  "Trains go the long way round: {actual} instead of {best}": "Поезда едут в объезд: {actual} вместо {best}",
+  "To shorten the line ({from} → {to} in all):": "Чтобы сократить маршрут (всего {from} → {to}):",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Смена терминалов не поможет: терминалы, сокращающие здесь один перегон, удлиняют другой. Может помочь изменение путей, например съезд."
  },
  "zh_CN": {
   "(The only other way runs against {count} one-way signals.)|other": "（唯一的另一条路要逆着{count}个单向信号灯行驶。）",
@@ -462,7 +492,10 @@
   "{name}, {distance} after {station}": "{name}，{station}之后{distance}",
   "{reason} ({from} → {to})": "{reason}（{from} → {to}）",
   "{waypoint} can't be reached from {from}": "无法从{from}到达{waypoint}",
-  "Shows the platform track of the suggested terminal.": "显示建议停靠位的站台轨道。"
+  "Shows the platform track of the suggested terminal.": "显示建议停靠位的站台轨道。",
+  "Trains go the long way round: {actual} instead of {best}": "列车绕远路：{actual}，本可只需{best}",
+  "To shorten the line ({from} → {to} in all):": "缩短线路（全程{from} → {to}）：",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "更改停靠位无济于事：能缩短这里某一区段的停靠位会使另一区段变长。修改轨道（例如加一个渡线）可能有帮助。"
  },
  "zh_TW": {
   "(The only other way runs against {count} one-way signals.)|other": "（唯一的另一條路要逆著{count}座單向號誌行駛。）",
@@ -503,6 +536,9 @@
   "{name}, {distance} after {station}": "{name}，{station}之後{distance}",
   "{reason} ({from} → {to})": "{reason}（{from} → {to}）",
   "{waypoint} can't be reached from {from}": "無法從{from}抵達{waypoint}",
-  "Shows the platform track of the suggested terminal.": "顯示建議總站的月台軌道。"
+  "Shows the platform track of the suggested terminal.": "顯示建議總站的月台軌道。",
+  "Trains go the long way round: {actual} instead of {best}": "列車繞遠路：{actual}，本可只需{best}",
+  "To shorten the line ({from} → {to} in all):": "縮短路線（全程{from} → {to}）：",
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "變更總站無濟於事：能縮短這裡某一區段的總站會使另一區段變長。修改軌道（例如加一個渡線）可能有幫助。"
  }
 }

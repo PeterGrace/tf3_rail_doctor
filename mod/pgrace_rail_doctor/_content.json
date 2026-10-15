@@ -2,6 +2,8 @@
     "archives": null,
     "files": [
         "gui/pgrace_rail_doctor/card.css.lua",
+        "gui/pgrace_rail_doctor/detour.d.tl",
+        "gui/pgrace_rail_doctor/detour.tl",
         "gui/pgrace_rail_doctor/line_plugin.res.lua",
         "gui/pgrace_rail_doctor/pgrace_rail_doctor.script.tl",
         "gui/pgrace_rail_doctor/plural.d.tl",

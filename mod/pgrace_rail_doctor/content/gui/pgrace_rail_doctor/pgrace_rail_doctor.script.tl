@@ -6,6 +6,7 @@ local line_util = ug_require "::/gui/line_vehicle_mgmt/line_util.tl" as LineUtil
 local suggest = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/suggest.tl" as PgraceRailDoctorSuggest
 local route = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/route.tl" as PgraceRailDoctorRoute
 local plural = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/plural.tl" as PgraceRailDoctorPlural
+local detour = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/detour.tl" as PgraceRailDoctorDetour
 
 -- A line window card for rail lines with legs that have no path: which terminals would give them one, and which
 -- one-way signals block a leg that no terminal fixes.
@@ -890,23 +891,240 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	return rows
 end
 
+---------------------------------------------------------------------------------------------------------------------
+-- Silent detours: a line the game is happy with, but whose trains take the long way round because a stop is on the
+-- wrong terminal. See docs/superpowers/specs/2026-10-14-silent-detours-design.md.
+
+local DETOUR_FRAME_US = 6000      -- work per frame before yielding to the game
+local DETOUR_TOTAL_US = 3000000   -- total work before giving up (spread over many frames)
+
+-- Track steps with lengths (the length of the piece entered), one-way signals as walls.
+local function weightedStepsFrom(track : Track, node : Engine.Entity, fromEdge : Engine.Entity, arriving : Vec3f) : {PgraceRailDoctorRoute.Weighted}
+	local out : {PgraceRailDoctorRoute.Weighted} = {}
+	for __, step in ipairs(stepsFrom(track, node, fromEdge, arriving, VERIFIED, true)) do
+		local p = piece(track, (parseKey(step.key)))
+		out[#out + 1] = { key = step.key, length = p and p.length or 0 }
+	end
+	return out
+end
+
+-- Shortest lengths from one end to each of several ends: goal index -> metres; unreachable ones are missing.
+local function lengthsFrom(track : Track, from : End, goals : {End}, pause : function()) : {integer : number}
+	local starts : {PgraceRailDoctorRoute.Weighted} = {}
+	if from.node ~= nil then
+		starts = weightedStepsFrom(track, from.node, nil, nil)
+	else
+		for __, d in ipairs(from.dirs) do
+			starts[#starts + 1] = { key = stateKey(from.piece, d), length = 0 }
+		end
+	end
+	local r = route.shortest(starts,
+		function(key : string) : string
+			for g, e in ipairs(goals) do
+				if atEnd(track, key, e) then
+					return tostring(g)
+				end
+			end
+			return nil
+		end,
+		#goals,
+		function(key : string) : {PgraceRailDoctorRoute.Weighted}
+			pause()
+			if track.timedOut then
+				return {}
+			end
+			local e, forward = parseKey(key)
+			local p = piece(track, e)
+			if p == nil then
+				return {}
+			end
+			local arriving = forward and p.t1 or api.type.Vec3f.new(-p.t0.x, -p.t0.y, -p.t0.z)
+			return weightedStepsFrom(track, forward and p.node1 or p.node0, e, arriving)
+		end,
+		MAX_EXPANDED)
+	local out : {integer : number} = {}
+	for id, length in pairs(r.found) do
+		out[math.floor(tonumber(id))] = length
+	end
+	return out
+end
+
+-- The detour check as a job: tasks (one shortest-path search each) to run a few per frame, then finish() builds the
+-- card's rows. Coroutines can't be used: an engine call inside one fails ("Value is not a string, but a thread").
+local record DetourJob
+	tasks : {function()}
+	finish : function() : {Row}
+end
+
+local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
+	local job : DetourJob = { tasks = {}, finish = function() : {Row} return {} end }
+	local line = api.engine.getComponent(lineEntity, api.type.ComponentType.LINE) as Engine.Component.Line
+	if line == nil or #line.stops < 2 then
+		return job
+	end
+	local n = #line.stops
+	local clock = api.type.Clock.new()
+	local stops : {StopInfo} = {}
+	local counts : {integer} = {}
+	for i, stop in ipairs(line.stops) do
+		stops[i] = stopInfo(stop)
+		if stops[i].current == nil or #stops[i].candidates == 0 then
+			return job
+		end
+		counts[i] = #stops[i].candidates
+	end
+	local waypoints : {{End}} = {}
+	local numbered = 0
+	for i, stop in ipairs(line.stops) do
+		waypoints[i] = {}
+		for __, wp in ipairs(stop.waypoints) do
+			numbered = numbered + 1
+			waypoints[i][#waypoints[i] + 1] = waypointEnd(track, wp.edgePos, fmt(_("Waypoint {n}"), { n = tostring(numbered) }))
+		end
+	end
+	local function stopEnd(i : integer, c : integer) : End
+		return { node = stops[i].candidates[c].node.entity, name = stops[i].name }
+	end
+	local function noPause() end
+
+	-- legLength[i][a][b]: stop i on terminal a to stop i + 1 on terminal b, waypoints included
+	local legLength : {integer : {integer : {integer : number}}} = {}
+	for i = 1, n do
+		local j = i % n + 1
+		local nextEnds : {End} = {}
+		for c = 1, counts[j] do
+			nextEnds[c] = stopEnd(j, c)
+		end
+		legLength[i] = {}
+		local wps = waypoints[i]
+		if #wps == 0 then
+			for a = 1, counts[i] do
+				table.insert(job.tasks, function()
+					legLength[i][a] = lengthsFrom(track, stopEnd(i, a), nextEnds, noPause)
+				end)
+			end
+		else
+			local middle : number = 0
+			local last : {integer : number} = {}
+			for k = 1, #wps - 1 do
+				table.insert(job.tasks, function()
+					local d = lengthsFrom(track, wps[k], { wps[k + 1] }, noPause)[1]
+					middle = (middle ~= nil and d ~= nil) and middle + d or nil
+				end)
+			end
+			table.insert(job.tasks, function()
+				last = lengthsFrom(track, wps[#wps], nextEnds, noPause)
+			end)
+			for a = 1, counts[i] do
+				-- runs after the tasks above, so middle and last are known
+				table.insert(job.tasks, function()
+					local first = lengthsFrom(track, stopEnd(i, a), { wps[1] }, noPause)[1]
+					legLength[i][a] = {}
+					for b = 1, counts[j] do
+						if first ~= nil and middle ~= nil and last[b] ~= nil then
+							legLength[i][a][b] = first + middle + last[b]
+						end
+					end
+				end)
+			end
+		end
+	end
+
+	job.finish = function() : {Row}
+	local rows : {Row} = {}
+	if track.timedOut then
+		log(string.format("detours: %s ran out of time", entityName(lineEntity)))
+		return rows
+	end
+
+	local function dist(leg : integer, a : integer, b : integer) : number
+		return legLength[leg][a] and legLength[leg][a][b]
+	end
+	local function actualOf(leg : integer) : number
+		return dist(leg, stops[leg].current, stops[leg % n + 1].current)
+	end
+
+	local flagged : {integer : {number, number}} = {}
+	local any = false
+	local parts : {string} = {}
+	for i = 1, n do
+		local shortest = math.huge
+		for a = 1, counts[i] do
+			for b = 1, counts[i % n + 1] do
+				local d = dist(i, a, b)
+				if d ~= nil and d < shortest then
+					shortest = d
+				end
+			end
+		end
+		local legBest : number = shortest < math.huge and shortest or nil
+		local actual = actualOf(i)
+		parts[#parts + 1] = string.format("leg %d %s/%s m", i, tostring(actual and math.floor(actual)), tostring(legBest and math.floor(legBest)))
+		if detour.isDetour(actual, legBest) then
+			flagged[i] = { actual, legBest }
+			any = true
+		end
+	end
+	log(string.format("detours: %s: %s (actual/best), %d searches, %.0f ms in all (spread over frames)", entityName(lineEntity),
+		table.concat(parts, "; "), #job.tasks, clock:getTime() / 1000))
+	if not any then
+		return rows
+	end
+
+	for i = 1, n do
+		local f = flagged[i]
+		if f ~= nil then
+			if #rows > 0 then
+				addRow(rows, 0, BLANK, "font-scale-body")
+			end
+			addRow(rows, 0, fmt(_("Leg {leg}: {from} → {to}"), { leg = tostring(i), from = stops[i].name, to = stops[i % n + 1].name }))
+			addRow(rows, 1, fmt(_("Trains go the long way round: {actual} instead of {best}"), {
+				actual = formatLength(f[1]), best = formatLength(f[2]),
+			}), "font-scale-annotation")
+		end
+	end
+
+	local assignment, total = detour.best(counts, dist)
+	local currentTotal = 0.0
+	for i = 1, n do
+		currentTotal = (currentTotal ~= nil and actualOf(i) ~= nil) and currentTotal + actualOf(i) or nil
+	end
+	local changes = 0
+	if assignment ~= nil and (currentTotal == nil or currentTotal - total >= 500) then
+		addRow(rows, 0, BLANK, "font-scale-body")
+		addRow(rows, 0, fmt(_("To shorten the line ({from} → {to} in all):"), {
+			from = currentTotal and formatLength(currentTotal) or "?", to = formatLength(total),
+		}))
+		for i = 1, n do
+			if assignment[i] ~= stops[i].current then
+				changes = changes + 1
+				local suggested = stops[i].candidates[assignment[i]]
+				addRow(rows, 1, fmt(_("Use {terminal} at {station} (now {current})"), {
+					terminal = terminalLabel(suggested), station = stops[i].name,
+					current = terminalLabel(stops[i].candidates[stops[i].current]),
+				}), "font-scale-annotation", nodePosition(suggested.node.entity),
+					_("Shows the platform track of the suggested terminal."), TERMINAL_ZOOM)
+			end
+		end
+	end
+	if changes > 0 then
+		addRow(rows, 0, _("Change terminals in Manage Line. If a mod assigns terminals automatically, turn that off for this line first."), "font-scale-annotation")
+	else
+		-- each flagged leg has a shorter way with other terminals, so those terminals must lengthen another leg
+		addRow(rows, 0, _("No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help."), "font-scale-annotation")
+	end
+	return rows
+	end
+	return job
+end
+
 local record BodyParams
 	entityId : Engine.Entity
 end
 
-local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : BodyParams) : TreeNodeId
-	local state = react.useStateLazy(function() : {Row}
-		local ok, rowsOrError = pcall(function() : {Row}
-			return diagnose(params.entityId)
-		end)
-		if ok then
-			return rowsOrError as {Row}
-		end
-		log("error: " .. tostring(rowsOrError))
-		return { { level = 0, text = _("Error (see log)"), class = "font-scale-body" } }
-	end)
+local function renderRows(rows : {Row}) : TreeNodeId
 	local children : {TreeNodeId} = {}
-	for __, row in ipairs(state:old()) do
+	for __, row in ipairs(rows) do
 		local indent = string.rep("  ", row.level)
 		if row.pos ~= nil then
 			local pos, zoom = row.pos, row.zoom or 10
@@ -936,9 +1154,142 @@ local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : Body
 		end
 	end
 	return builtin.BoxLayout{ children = children }
+end
+
+local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : BodyParams) : TreeNodeId
+	local state = react.useStateLazy(function() : {Row}
+		local ok, rowsOrError = pcall(function() : {Row}
+			return diagnose(params.entityId)
+		end)
+		if ok then
+			return rowsOrError as {Row}
+		end
+		log("error: " .. tostring(rowsOrError))
+		return { { level = 0, text = _("Error (see log)"), class = "font-scale-body" } }
+	end)
+	return renderRows(state:old())
 end)
 
+local record RowsParams
+	rows : {Row}
+end
+
+local RowsView = react.RegisterRecipe("PgraceRailDoctorRows", function(params : RowsParams) : TreeNodeId
+	return renderRows(params.rows)
+end)
+
+-- react.enqueueJoin runs joins without a pcall, and a join can run just after its recipe unmounts: guard the body.
+local loggedJoinError = false
+local function safeJoin(fn : function(), scope : string)
+	react.enqueueJoin(function()
+		local ok, err = pcall(function() : boolean
+			fn()
+			return true
+		end)
+		if not ok and not loggedJoinError then
+			loggedJoinError = true
+			log(scope .. " error: " .. tostring(err))
+		end
+	end, scope)
+end
+
+local record DetourParams
+	entityId : Engine.Entity
+	gameCtx : GameContext
+	showOnRightSide : boolean
+end
+
+-- Runs the detour check a few milliseconds per frame (tasks run from a join), and shows a card only if it found a
+-- detour.
+local DetourCard = react.RegisterRecipe("PgraceRailDoctorDetours", function(params : DetourParams) : TreeNodeId
+	local rowsState : ReactStateT<{Row}> = react.useState(nil)
+	local jobRef : ReactRefT<DetourJob> = react.useRef(nil)
+	local nextRef : ReactRefT<integer> = react.useRef(1)
+	local workRef : ReactRefT<number> = react.useRef(0)
+	local doneRef : ReactRefT<boolean> = react.useRef(false)
+	local queuedRef : ReactRefT<boolean> = react.useRef(false)
+	local trackRef : ReactRefT<Track> = react.useRef(nil)
+	react.onStep(function()
+		if doneRef:get() or queuedRef:get() then
+			return
+		end
+		queuedRef:set(true)
+		safeJoin(function()
+			queuedRef:set(false)
+			if doneRef:get() then
+				return
+			end
+			local ok, err = pcall(function() : boolean
+				local frame = api.type.Clock.new()
+				local job = jobRef:get()
+				if job == nil then
+					trackRef:set(newTrack())
+					job = detourJob(params.entityId, trackRef:get())
+					jobRef:set(job)
+				end
+				local track = trackRef:get()
+				local i = nextRef:get()
+				while i <= #job.tasks and frame:getTime() < DETOUR_FRAME_US and not track.timedOut do
+					job.tasks[i]()
+					i = i + 1
+				end
+				nextRef:set(i)
+				workRef:set(workRef:get() + frame:getTime())
+				if workRef:get() > DETOUR_TOTAL_US then
+					track.timedOut = true
+				end
+				if i > #job.tasks or track.timedOut then
+					doneRef:set(true)
+					rowsState:set(job.finish() or {})
+				end
+				return true
+			end)
+			if not ok then
+				doneRef:set(true)
+				log("detours error: " .. tostring(err))
+			end
+		end, "PgraceRailDoctorDetours")
+	end)
+	local rows = rowsState:old()
+	if rows == nil or #rows == 0 then
+		return builtin.BoxLayout{ children = {} }
+	end
+	return builtin.BoxLayout{
+		child = content_card.ContentCard{
+			title = _("Rail Doctor"),
+			initialCalloutTextPermanent = "",
+			recipeAndParamPermanent = content_card.makeRecipeAndParam(RowsView, { rows = rows } as RowsParams),
+			gameCtx = params.gameCtx,
+			showOnRightSide = params.showOnRightSide,
+		},
+	}
+end)
+
+local function isBroken(lineEntity : Engine.Entity) : boolean
+	local ok, result = pcall(function() : boolean
+		for __, segment in ipairs(api.engine.util.line.getDetailedLineProblems(lineEntity) or {}) do
+			for __, st in ipairs(segment) do
+				if st.noPath or st.noPathFromAlternative ~= nil or st.noPathToAlternative ~= nil then
+					return true
+				end
+			end
+		end
+		return false
+	end)
+	return not ok or result as boolean
+end
+
 local LinePlugin = react.RegisterPluginRecipe(line_eow.LineEowExtensionPoint, "PgraceRailDoctorLinePlugin", function(params : LineEow.LineWidgetPluginParams) : TreeNodeId
+	-- a broken line gets the full diagnosis at once; any other rail line a detour check in the background
+	local broken = react.useStateLazy(function() : boolean
+		return isBroken(params.entityId)
+	end)
+	if not broken:old() then
+		-- a recipe must return a layout, never another recipe's node directly
+		return builtin.BoxLayout{
+			child = DetourCard{ entityId = params.entityId, gameCtx = params.gameCtx, showOnRightSide = params.showCalloutOnRightSide },
+		}
+	end
 	return builtin.BoxLayout{
 		child = content_card.ContentCard{
 			title = _("Rail Doctor"),
@@ -950,20 +1301,11 @@ local LinePlugin = react.RegisterPluginRecipe(line_eow.LineEowExtensionPoint, "P
 	}
 end)
 
--- Shown on rail lines with a leg that has no path, or an alternative terminal trains can't use. True on error, so the card can report the problem.
+-- Shown on every rail line: broken ones get the diagnosis, the others the background detour check (which shows
+-- nothing unless it finds a detour). True on error, so the card can report the problem.
 local function hasBrokenRailLeg(params : LineEow.LineWidgetPluginParams) : boolean
 	local ok, result = pcall(function() : boolean
-		if not api.engine.util.line.isLineCompatibleWithCarrier(params.entityId, api.type.enum.Carrier.RAIL, false) then
-			return false
-		end
-		for __, segment in ipairs(api.engine.util.line.getDetailedLineProblems(params.entityId) or {}) do
-			for __, st in ipairs(segment) do
-				if st.noPath or st.noPathFromAlternative ~= nil or st.noPathToAlternative ~= nil then
-					return true
-				end
-			end
-		end
-		return false
+		return api.engine.util.line.isLineCompatibleWithCarrier(params.entityId, api.type.enum.Carrier.RAIL, false)
 	end)
 	if not ok then
 		log("condition error: " .. tostring(result))
