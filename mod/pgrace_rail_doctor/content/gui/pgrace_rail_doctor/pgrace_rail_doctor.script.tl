@@ -75,23 +75,6 @@ local function stopInfo(stop : Engine.Component.Line.Stop) : StopInfo
 	return info
 end
 
-local loggedPathError = false
-
--- The game's pathfinder. Kept for comparison: on one line it found paths the game rejects.
-local function trainPath(from : NodeId, to : NodeId) : boolean
-	local ok, path = pcall(function() : {{EdgeId, boolean}}
-		return api.engine.util.pathfinding.findPathNodeToNode({ from }, { to }, { api.type.enum.TransportMode.TRAIN })
-	end)
-	if not ok then
-		if not loggedPathError then
-			loggedPathError = true
-			log("findPathNodeToNode failed: " .. tostring(path))
-		end
-		return false
-	end
-	return path ~= nil and #(path as {any}) > 0
-end
-
 ---------------------------------------------------------------------------------------------------------------------
 -- Track as a train sees it. Each piece of track is a BASE_EDGE entity between two base-node entities, with one
 -- transport-network edge (index 0). A search state is "<edge>+" (running node0 -> node1) or "<edge>-", standing at
@@ -288,16 +271,51 @@ local function stepsFrom(track : Track, node : Engine.Entity, fromEdge : Engine.
 	return out
 end
 
+-- Where a stretch of a line starts or ends: a terminal's node, or a waypoint (a piece of track a train passes in one
+-- of dirs).
+local record End
+	node : Engine.Entity
+	piece : Engine.Entity
+	dirs : {boolean}
+	name : string
+end
+
+local function arrivalNode(track : Track, key : string) : Engine.Entity
+	local e, forward = parseKey(key)
+	local p = piece(track, e)
+	return p and (forward and p.node1 or p.node0)
+end
+
+local function atEnd(track : Track, key : string, to : End) : boolean
+	if to.node ~= nil then
+		return arrivalNode(track, key) == to.node
+	end
+	local e, forward = parseKey(key)
+	if e ~= to.piece then
+		return false
+	end
+	for __, d in ipairs(to.dirs) do
+		if d == forward then
+			return true
+		end
+	end
+	return false
+end
+
+-- A train starts at a terminal facing either way; from a waypoint it carries on the way it passed it.
 -- visit, if given, sees every state the search takes off its queue; isGoal, if given, replaces "arrived at to".
-local function searchLeg(track : Track, from : Engine.Entity, to : Engine.Entity, v : Variant, walls : boolean,
+local function searchBetween(track : Track, from : End, to : End, v : Variant, walls : boolean,
 		visit? : function(key : string), isGoal? : function(key : string) : boolean) : PgraceRailDoctorRoute.Result
-	local function arrivalNode(key : string) : Engine.Entity
-		local e, forward = parseKey(key)
-		local p = piece(track, e)
-		return p and (forward and p.node1 or p.node0)
+	local starts : {PgraceRailDoctorRoute.Step} = {}
+	if from.node ~= nil then
+		starts = stepsFrom(track, from.node, nil, nil, v, walls)
+	else
+		for __, d in ipairs(from.dirs) do
+			starts[#starts + 1] = { key = stateKey(from.piece, d), cost = 0 }
+		end
 	end
 	return route.search(
-		stepsFrom(track, from, nil, nil, v, walls),
+		starts,
 		function(key : string) : boolean
 			if visit ~= nil then
 				visit(key)
@@ -305,7 +323,7 @@ local function searchLeg(track : Track, from : Engine.Entity, to : Engine.Entity
 			if isGoal ~= nil then
 				return isGoal(key)
 			end
-			return arrivalNode(key) == to
+			return atEnd(track, key, to)
 		end,
 		function(key : string) : {PgraceRailDoctorRoute.Step}
 			if track.timedOut or track.clock:getTime() > BUDGET_US then
@@ -342,22 +360,47 @@ local function nodePosition(node : Engine.Entity) : Vec3f
 	return ok and pos as Vec3f or nil
 end
 
+local function endPosition(track : Track, e : End) : Vec3f
+	if e.node ~= nil then
+		return nodePosition(e.node)
+	end
+	local p = piece(track, e.piece)
+	return p and p.mid
+end
+
+-- The directions a train may pass a line's waypoint in: the way the waypoint signal on its piece faces (type 2;
+-- getSignal(edge, true) is the one for trains running node0 -> node1, see blocker), or both if there's none.
+local function waypointEnd(track : Track, edgeId : EdgeId, name : string) : End
+	local dirs : {boolean} = {}
+	for __, forward in ipairs({ true, false }) do
+		local s = signalOn(track, edgeId.entity, forward)
+		if s ~= nil and s.typeText == "2" then
+			dirs[#dirs + 1] = forward
+		end
+	end
+	log(string.format("waypoint %s on piece %s: %d direction(s) from its signal", name, tostring(edgeId.entity), #dirs))
+	if #dirs == 0 then
+		dirs = { true, false }
+	end
+	return { piece = edgeId.entity, dirs = dirs, name = name }
+end
+
 local record Frontier
 	pos : Vec3f
-	distance : number   -- metres along the track from the leg's start
+	distance : number   -- metres along the track from the stretch's start
 end
 
 -- How far towards the destination a train gets, obeying the signals: of everywhere it can reach, the track end
 -- nearest the destination (straight line). That's where to look for a gap.
-local function frontierOf(track : Track, from : Engine.Entity, to : Engine.Entity, v : Variant) : Frontier
-	local target = nodePosition(to)
+local function frontierOf(track : Track, from : End, to : End, v : Variant) : Frontier
+	local target = endPosition(track, to)
 	if target == nil then
 		return nil
 	end
 	local bestKey : string = nil
 	local bestPos : Vec3f = nil
 	local bestDist = math.huge
-	searchLeg(track, from, to, v, true, function(key : string)
+	searchBetween(track, from, to, v, true, function(key : string)
 		local e, forward = parseKey(key)
 		local p = piece(track, e)
 		local pos = p and (forward and p.p1 or p.p0)
@@ -372,7 +415,7 @@ local function frontierOf(track : Track, from : Engine.Entity, to : Engine.Entit
 	if bestKey == nil then
 		return nil
 	end
-	local r = searchLeg(track, from, to, v, true, nil, function(key : string) : boolean
+	local r = searchBetween(track, from, to, v, true, nil, function(key : string) : boolean
 		return key == bestKey
 	end)
 	return { pos = bestPos, distance = r.found and routeLength(track, r) or 0 }
@@ -483,6 +526,43 @@ local function formatLength(m : number) : string
 	return ok and s as string or string.format("%.0f m", m)
 end
 
+-- What's in the way on one stretch (the current terminals): one or two wrong-way signals, or the place trains get
+-- stuck.
+local function reportStretch(rows : {Row}, track : Track, from : End, to : End, v : Variant, label : string)
+	local r = searchBetween(track, from, to, v, false)
+	local blockers = r.found and blockersOn(track, r, v) or {}
+	log(string.format("%s: cheapest route passes %d signal(s) the wrong way (%d states)", label, #blockers, r.expanded))
+	if #blockers == 0 or #blockers > MAX_SIGNALS_LISTED then
+		local f = frontierOf(track, from, to, v)
+		if f ~= nil then
+			log(string.format("  stuck at %.0f m, pos (%.0f, %.0f)", f.distance, f.pos.x, f.pos.y))
+			addRow(rows, "    " .. fmt(_("Trains get no closer to {to} than here, {distance} after {station}. Is the track connected?"), {
+				to = to.name, distance = formatLength(f.distance), station = from.name,
+			}), "font-scale-annotation", f.pos)
+		else
+			addRow(rows, "    " .. _("No terminals work, and no track leads there"), "font-scale-annotation")
+		end
+		if #blockers > 0 then
+			addRow(rows, "    " .. fmt(_("(The only other way runs against {count} one-way signals.)"), {
+				count = tostring(#blockers),
+			}), "font-scale-annotation")
+		end
+		return
+	end
+	for __, b in ipairs(blockers) do
+		log(string.format("  blocker: list %s[%d] %s at %.0f m, pos (%.0f, %.0f)", tostring(b.signal.list), b.signal.index,
+			b.signal.typeText, b.distance, b.pos.x, b.pos.y))
+		-- the name the game gives the signal ("Signal #4"), as in its window
+		local name = entityName(b.signal.list)
+		local text = (name ~= "?" and name ~= "")
+			and fmt(_("One-way signal ({name}) facing the wrong way, {distance} after {station}"), {
+				name = name, distance = formatLength(b.distance), station = from.name })
+			or fmt(_("One-way signal facing the wrong way, {distance} after {station}"), {
+				distance = formatLength(b.distance), station = from.name })
+		addRow(rows, "    " .. text, "font-scale-annotation", signalPosition(b.signal.list, b.pos))
+	end
+end
+
 local function diagnose(lineEntity : Engine.Entity) : {Row}
 	local rows : {Row} = {}
 	local clock = api.type.Clock.new()
@@ -493,18 +573,16 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	local n = #line.stops
 	log("==== " .. entityName(lineEntity) .. " (" .. tostring(lineEntity) .. "), " .. n .. " stops")
 
-	-- the game's verdict per leg; leg i runs from stop i to stop i % n + 1
-	local gameBroken : {boolean} = {}
-	local entries = 0
-	for __, segment in ipairs(api.engine.util.line.getDetailedLineProblems(lineEntity) or {}) do
-		for __, st in ipairs(segment) do
-			entries = entries + 1
-			gameBroken[entries] = st.noPath == true
-		end
+	-- The game's verdict: one list per stop. Entry 1 runs from stop i to its first waypoint (or the next stop),
+	-- entry k from waypoint k - 1 on.
+	local problems = api.engine.util.line.getDetailedLineProblems(lineEntity) or {}
+	local shapeOk = #problems == n
+	for i = 1, n do
+		shapeOk = shapeOk and problems[i] ~= nil and #problems[i] == 1 + #line.stops[i].waypoints
 	end
-	if entries ~= n then
-		log("problem entries " .. entries .. " vs stops " .. n)
-		addRow(rows, _("Rail Doctor can't read this line's problems yet (waypoints?)."))
+	if not shapeOk then
+		log("problem lists don't match the stops and waypoints")
+		addRow(rows, _("Rail Doctor can't read this line's problems."))
 		return rows
 	end
 
@@ -517,46 +595,66 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 			return rows
 		end
 	end
-	local function nodeOf(stop : integer, candidate : integer) : NodeId
-		return stops[stop].candidates[candidate].node
+
+	local track = newTrack()
+	local waypoints : {{End}} = {}
+	local numbered = 0
+	for i, stop in ipairs(line.stops) do
+		waypoints[i] = {}
+		for __, wp in ipairs(stop.waypoints) do
+			numbered = numbered + 1
+			waypoints[i][#waypoints[i] + 1] = waypointEnd(track, wp.edgePos.edgeId, fmt(_("waypoint {n}"), { n = tostring(numbered) }))
+		end
+	end
+
+	-- the ends of leg i's stretches: stop i (terminal a), its waypoints, stop i + 1 (terminal b)
+	local function legEnds(i : integer, a : integer, b : integer) : {End}
+		local j = i % n + 1
+		local ends : {End} = { { node = stops[i].candidates[a].node.entity, name = stops[i].name } }
+		for __, wp in ipairs(waypoints[i]) do
+			ends[#ends + 1] = wp
+		end
+		ends[#ends + 1] = { node = stops[j].candidates[b].node.entity, name = stops[j].name }
+		return ends
+	end
+	local function currentEnds(i : integer) : {End}
+		return legEnds(i, stops[i].current, stops[i % n + 1].current)
 	end
 
 	local broken : {integer} = {}
 	for i = 1, n do
-		if gameBroken[i] then
-			broken[#broken + 1] = i
+		for __, st in ipairs(problems[i]) do
+			if st.noPath then
+				broken[#broken + 1] = i
+				break
+			end
 		end
 	end
 	logBestAssignment(lineEntity, line)
 
-	-- Self-check: does our search agree with the game on every leg?
-	local track = newTrack()
-	local chosen : Variant = nil
-	for __, v in ipairs({ VERIFIED }) do
-		local parts : {string} = {}
-		local agree = true
-		for i = 1, n do
-			local r = searchLeg(track, nodeOf(i, stops[i].current).entity, nodeOf(i % n + 1, stops[i % n + 1].current).entity, v, true)
-			local pf = trainPath(nodeOf(i, stops[i].current), nodeOf(i % n + 1, stops[i % n + 1].current))
-			parts[#parts + 1] = string.format("leg %d game=%s ours=%s(%d) pathfinder=%s", i, gameBroken[i] and "NO" or "ok",
-				r.found and "ok" or "NO", r.expanded, pf and "ok" or "NO")
-			if r.found == gameBroken[i] then
+	-- Self-check: does our search agree with the game on every stretch?
+	local v = VERIFIED
+	local agree = true
+	local parts : {string} = {}
+	for i = 1, n do
+		local ends = currentEnds(i)
+		for k = 1, #ends - 1 do
+			local r = searchBetween(track, ends[k], ends[k + 1], v, true)
+			local gameNo = problems[i][k].noPath == true
+			parts[#parts + 1] = string.format("%d.%d game=%s ours=%s(%d)", i, k, gameNo and "NO" or "ok", r.found and "ok" or "NO", r.expanded)
+			if r.found == gameNo then
 				agree = false
 				if r.found then
-					dumpRoute(track, "leg " .. i .. " (game says no path)", r)   -- PROBE
+					dumpRoute(track, string.format("stretch %d.%d (game says no path)", i, k), r)   -- PROBE
 				end
 			end
-		end
-		log("variant " .. v.name .. (agree and " AGREES: " or " differs: ") .. table.concat(parts, "; "))
-		if agree and chosen == nil then
-			chosen = v
 		end
 	end
 	local typeList : {string} = {}
 	for t in pairs(track.typeTexts) do
 		typeList[#typeList + 1] = t
 	end
-	log("signal types seen: " .. table.concat(typeList, ", ") .. "; chosen variant: " .. (chosen and chosen.name or "none"))
+	log((agree and "AGREES: " or "differs: ") .. table.concat(parts, "; ") .. "; signal types seen: " .. table.concat(typeList, ", "))
 	if track.timedOut then
 		log(string.format("out of time after %.0f ms", clock:getTime() / 1000))
 		if #broken > 0 then
@@ -578,7 +676,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		})
 	end
 
-	if chosen == nil then
+	if not agree then
 		for __, i in ipairs(broken) do
 			addRow(rows, legTitle(i))
 		end
@@ -587,10 +685,17 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		return rows
 	end
 
+	-- A leg works with terminals a and b if every stretch, waypoints included, has a path.
 	local searches = 0
 	local reach = function(leg : integer, a : integer, b : integer) : boolean
-		searches = searches + 1
-		return searchLeg(track, nodeOf(leg, a).entity, nodeOf(leg % n + 1, b).entity, chosen, true).found
+		local ends = legEnds(leg, a, b)
+		for k = 1, #ends - 1 do
+			searches = searches + 1
+			if not searchBetween(track, ends[k], ends[k + 1], v, true).found then
+				return false
+			end
+		end
+		return true
 	end
 
 	local solverStops : {PgraceRailDoctorSuggest.Stop} = {}
@@ -613,39 +718,14 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 			end
 		else
 			local i = fix.leg
-			local from = stops[i]
-			local r = searchLeg(track, nodeOf(i, from.current).entity, nodeOf(i % n + 1, stops[i % n + 1].current).entity, chosen, false)
-			local blockers = r.found and blockersOn(track, r, chosen) or {}
-			log(string.format("leg %d: cheapest route passes %d signal(s) the wrong way (%d states)", i, #blockers, r.expanded))
-			if #blockers == 0 or #blockers > MAX_SIGNALS_LISTED then
-				local to = stops[i % n + 1]
-				local f = frontierOf(track, nodeOf(i, from.current).entity, nodeOf(i % n + 1, to.current).entity, chosen)
-				if f ~= nil then
-					log(string.format("  stuck at %.0f m, pos (%.0f, %.0f)", f.distance, f.pos.x, f.pos.y))
-					addRow(rows, "    " .. fmt(_("Trains get no closer to {to} than here, {distance} after {station}. Is the track connected?"), {
-						to = to.name, distance = formatLength(f.distance), station = from.name,
-					}), "font-scale-annotation", f.pos)
-				else
-					addRow(rows, "    " .. _("No terminals work, and no track leads there"), "font-scale-annotation")
+			local ends = currentEnds(i)
+			for k = 1, #ends - 1 do
+				if problems[i][k].noPath then
+					if #ends > 2 then
+						addRow(rows, "    " .. fmt(_("{from} → {to}:"), { from = ends[k].name, to = ends[k + 1].name }), "font-scale-annotation")
+					end
+					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k))
 				end
-				if #blockers > 0 then
-					addRow(rows, "    " .. fmt(_("(The only other way runs against {count} one-way signals.)"), {
-						count = tostring(#blockers),
-					}), "font-scale-annotation")
-				end
-				blockers = {}
-			end
-			for __, b in ipairs(blockers) do
-				log(string.format("  blocker: list %s[%d] %s at %.0f m, pos (%.0f, %.0f)", tostring(b.signal.list), b.signal.index,
-					b.signal.typeText, b.distance, b.pos.x, b.pos.y))
-				-- the name the game gives the signal ("Signal #4"), as in its window
-				local name = entityName(b.signal.list)
-				local text = (name ~= "?" and name ~= "")
-					and fmt(_("One-way signal ({name}) facing the wrong way, {distance} after {station}"), {
-						name = name, distance = formatLength(b.distance), station = from.name })
-					or fmt(_("One-way signal facing the wrong way, {distance} after {station}"), {
-						distance = formatLength(b.distance), station = from.name })
-				addRow(rows, "    " .. text, "font-scale-annotation", signalPosition(b.signal.list, b.pos))
 			end
 		end
 	end
