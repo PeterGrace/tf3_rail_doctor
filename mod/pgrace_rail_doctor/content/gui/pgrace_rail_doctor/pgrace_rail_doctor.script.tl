@@ -104,6 +104,8 @@ local record Piece
 	t1 : Vec3f
 	length : number
 	mid : Vec3f
+	p0 : Vec3f
+	p1 : Vec3f
 	edgeCount : integer   -- transport-network edges in the piece (a signal may split it)
 end
 
@@ -162,7 +164,7 @@ local function piece(track : Track, e : Engine.Entity) : Piece
 				length = length + edge.geometry.length
 			end
 			return {
-				node0 = be.node0, node1 = be.node1, t0 = be.tangent0, t1 = be.tangent1,
+				node0 = be.node0, node1 = be.node1, t0 = be.tangent0, t1 = be.tangent1, p0 = be.position0, p1 = be.position1,
 				length = length, mid = api.engine.util.transport.calcPosition(geom, 0.5),
 				edgeCount = #tn.edges,
 			}
@@ -286,7 +288,9 @@ local function stepsFrom(track : Track, node : Engine.Entity, fromEdge : Engine.
 	return out
 end
 
-local function searchLeg(track : Track, from : Engine.Entity, to : Engine.Entity, v : Variant, walls : boolean) : PgraceRailDoctorRoute.Result
+-- visit, if given, sees every state the search takes off its queue; isGoal, if given, replaces "arrived at to".
+local function searchLeg(track : Track, from : Engine.Entity, to : Engine.Entity, v : Variant, walls : boolean,
+		visit? : function(key : string), isGoal? : function(key : string) : boolean) : PgraceRailDoctorRoute.Result
 	local function arrivalNode(key : string) : Engine.Entity
 		local e, forward = parseKey(key)
 		local p = piece(track, e)
@@ -295,6 +299,12 @@ local function searchLeg(track : Track, from : Engine.Entity, to : Engine.Entity
 	return route.search(
 		stepsFrom(track, from, nil, nil, v, walls),
 		function(key : string) : boolean
+			if visit ~= nil then
+				visit(key)
+			end
+			if isGoal ~= nil then
+				return isGoal(key)
+			end
 			return arrivalNode(key) == to
 		end,
 		function(key : string) : {PgraceRailDoctorRoute.Step}
@@ -312,6 +322,65 @@ local function searchLeg(track : Track, from : Engine.Entity, to : Engine.Entity
 		end,
 		MAX_EXPANDED)
 end
+
+local function routeLength(track : Track, result : PgraceRailDoctorRoute.Result) : number
+	local total = 0.0
+	for __, key in ipairs(result.keys) do
+		local p = piece(track, (parseKey(key)))
+		if p ~= nil then
+			total = total + p.length
+		end
+	end
+	return total
+end
+
+local function nodePosition(node : Engine.Entity) : Vec3f
+	local ok, pos = pcall(function() : Vec3f
+		local bn = api.engine.getComponent(node, api.type.ComponentType.BASE_NODE) as Engine.Component.BaseNode
+		return bn and bn.position
+	end)
+	return ok and pos as Vec3f or nil
+end
+
+local record Frontier
+	pos : Vec3f
+	distance : number   -- metres along the track from the leg's start
+end
+
+-- How far towards the destination a train gets, obeying the signals: of everywhere it can reach, the track end
+-- nearest the destination (straight line). That's where to look for a gap.
+local function frontierOf(track : Track, from : Engine.Entity, to : Engine.Entity, v : Variant) : Frontier
+	local target = nodePosition(to)
+	if target == nil then
+		return nil
+	end
+	local bestKey : string = nil
+	local bestPos : Vec3f = nil
+	local bestDist = math.huge
+	searchLeg(track, from, to, v, true, function(key : string)
+		local e, forward = parseKey(key)
+		local p = piece(track, e)
+		local pos = p and (forward and p.p1 or p.p0)
+		if pos ~= nil then
+			local dx, dy = pos.x - target.x, pos.y - target.y
+			local d = dx * dx + dy * dy
+			if d < bestDist then
+				bestDist, bestKey, bestPos = d, key, pos
+			end
+		end
+	end)
+	if bestKey == nil then
+		return nil
+	end
+	local r = searchLeg(track, from, to, v, true, nil, function(key : string) : boolean
+		return key == bestKey
+	end)
+	return { pos = bestPos, distance = r.found and routeLength(track, r) or 0 }
+end
+
+-- With more wrong-way signals than this on the cheapest route, the route is running against the traffic on the
+-- other track (a gap, say), and the place trains get stuck says more than the list of signals.
+local MAX_SIGNALS_LISTED = 2
 
 local record Blocker
 	signal : SignalAt
@@ -548,8 +617,23 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 			local r = searchLeg(track, nodeOf(i, from.current).entity, nodeOf(i % n + 1, stops[i % n + 1].current).entity, chosen, false)
 			local blockers = r.found and blockersOn(track, r, chosen) or {}
 			log(string.format("leg %d: cheapest route passes %d signal(s) the wrong way (%d states)", i, #blockers, r.expanded))
-			if #blockers == 0 then
-				addRow(rows, "    " .. _("No terminals work, and no track leads there"), "font-scale-annotation")
+			if #blockers == 0 or #blockers > MAX_SIGNALS_LISTED then
+				local to = stops[i % n + 1]
+				local f = frontierOf(track, nodeOf(i, from.current).entity, nodeOf(i % n + 1, to.current).entity, chosen)
+				if f ~= nil then
+					log(string.format("  stuck at %.0f m, pos (%.0f, %.0f)", f.distance, f.pos.x, f.pos.y))
+					addRow(rows, "    " .. fmt(_("Trains get no closer to {to} than here, {distance} after {station}. Is the track connected?"), {
+						to = to.name, distance = formatLength(f.distance), station = from.name,
+					}), "font-scale-annotation", f.pos)
+				else
+					addRow(rows, "    " .. _("No terminals work, and no track leads there"), "font-scale-annotation")
+				end
+				if #blockers > 0 then
+					addRow(rows, "    " .. fmt(_("(The only other way runs against {count} one-way signals.)"), {
+						count = tostring(#blockers),
+					}), "font-scale-annotation")
+				end
+				blockers = {}
 			end
 			for __, b in ipairs(blockers) do
 				log(string.format("  blocker: list %s[%d] %s at %.0f m, pos (%.0f, %.0f)", tostring(b.signal.list), b.signal.index,
