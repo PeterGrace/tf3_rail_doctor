@@ -532,8 +532,9 @@ end
 -- level: the indent of its rows. orChange: the card has already named a likelier cause, so the signals are only the
 -- other way to fix it.
 -- sub: a label for this stretch inside the "or" block, when the block covers more than one stretch.
+-- inOr: the rows sit inside an "or change these one-way signals" block opened by an earlier stretch.
 local function reportStretch(rows : {Row}, track : Track, from : End, to : End, v : Variant, label : string, level : integer,
-		orChange : boolean, sub? : string)
+		orChange : boolean, sub? : string, inOr? : boolean)
 	local r = searchBetween(track, from, to, v, false)
 	local blockers = r.found and blockersOn(track, r, v) or {}
 	log(string.format("%s: cheapest route passes %d signal(s) the wrong way (%d states)", label, #blockers, r.expanded))
@@ -578,7 +579,7 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 		local named = name ~= "?" and name ~= ""
 		local values = { name = name, distance = formatLength(b.distance), station = from.name }
 		local text : string
-		if orChange then
+		if orChange or inOr then
 			text = named and fmt(_("{name}, {distance} after {station}"), values) or fmt(_("Signal, {distance} after {station}"), values)
 		else
 			text = named and fmt(_("Wrong-way one-way signal ({name}), {distance} after {station}"), values)
@@ -747,7 +748,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				if problems[i][k].noPath then
 					-- a waypoint on the wrong track is the likeliest cause: ask about it first, once
 					local wp = ends[k + 1].piece ~= nil and ends[k + 1] or (ends[k].piece ~= nil and ends[k] or nil)
-					local level, orChange = 1, false
+					local level, orChange, inOr = 1, false, false
 					local sub : string = nil
 					local stretchLabel = fmt(_("{from} → {to}:"), { from = ends[k].name, to = ends[k + 1].name })
 					if wp ~= nil and not asked[wp] then
@@ -766,12 +767,12 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 					elseif wp ~= nil then
 						-- the far side of a waypoint already asked about: part of the same "or" block
 						addRow(rows, 2, stretchLabel, "font-scale-annotation")
-						level = 3
+						level, inOr = 3, true
 					elseif #ends > 2 then
 						addRow(rows, 1, stretchLabel, "font-scale-annotation")
 						level = 2
 					end
-					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k), level, orChange, sub)
+					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k), level, orChange, sub, inOr)
 				end
 			end
 		end
