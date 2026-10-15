@@ -480,13 +480,14 @@ end
 -- The card
 
 local record Row
+	level : integer   -- indent: 0 titles, 1 details, 2 details of a detail
 	text : string
 	class : string
 	pos : Vec3f   -- set: the row is a button that moves the camera here
 end
 
-local function addRow(rows : {Row}, text : string, class? : string, pos? : Vec3f)
-	rows[#rows + 1] = { text = text, class = class or "font-scale-body", pos = pos }
+local function addRow(rows : {Row}, level : integer, text : string, class? : string, pos? : Vec3f)
+	rows[#rows + 1] = { level = level, text = text, class = class or "font-scale-body", pos = pos }
 end
 
 -- Where a signal stands: its own bounding box if it has one, else the middle of its piece of track.
@@ -527,7 +528,10 @@ end
 
 -- What's in the way on one stretch (the current terminals): one or two wrong-way signals, or the place trains get
 -- stuck.
-local function reportStretch(rows : {Row}, track : Track, from : End, to : End, v : Variant, label : string)
+-- level: the indent of its rows. orChange: the card has already named a likelier cause, so the signals are only the
+-- other way to fix it.
+local function reportStretch(rows : {Row}, track : Track, from : End, to : End, v : Variant, label : string, level : integer,
+		orChange : boolean)
 	local r = searchBetween(track, from, to, v, false)
 	local blockers = r.found and blockersOn(track, r, v) or {}
 	log(string.format("%s: cheapest route passes %d signal(s) the wrong way (%d states)", label, #blockers, r.expanded))
@@ -535,18 +539,22 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 		local f = frontierOf(track, from, to, v)
 		if f ~= nil then
 			log(string.format("  stuck at %.0f m, pos (%.0f, %.0f)", f.distance, f.pos.x, f.pos.y))
-			addRow(rows, "    " .. fmt(_("Trains get no closer to {to} than here, {distance} after {station}. Is the track connected?"), {
+			addRow(rows, level, fmt(_("Trains get no closer to {to} than here, {distance} after {station}. Is the track connected?"), {
 				to = to.name, distance = formatLength(f.distance), station = from.name,
 			}), "font-scale-annotation", f.pos)
 		else
-			addRow(rows, "    " .. _("No terminals work, and no track leads there"), "font-scale-annotation")
+			addRow(rows, level, _("No terminals work, and no track leads there"), "font-scale-annotation")
 		end
 		if #blockers > 0 then
-			addRow(rows, "    " .. fmt(_("(The only other way runs against {count} one-way signals.)"), {
+			addRow(rows, level, fmt(_("(The only other way runs against {count} one-way signals.)"), {
 				count = tostring(#blockers),
 			}), "font-scale-annotation")
 		end
 		return
+	end
+	if orChange then
+		addRow(rows, level, _("Or change these one-way signals:"), "font-scale-annotation")
+		level = level + 1
 	end
 	for __, b in ipairs(blockers) do
 		log(string.format("  blocker: list %s[%d] %s at %.0f m, pos (%.0f, %.0f)", tostring(b.signal.list), b.signal.index,
@@ -558,7 +566,7 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 				name = name, distance = formatLength(b.distance), station = from.name })
 			or fmt(_("One-way signal facing the wrong way, {distance} after {station}"), {
 				distance = formatLength(b.distance), station = from.name })
-		addRow(rows, "    " .. text, "font-scale-annotation", signalPosition(b.signal.list, b.pos))
+		addRow(rows, level, text, "font-scale-annotation", signalPosition(b.signal.list, b.pos))
 	end
 end
 
@@ -581,7 +589,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	end
 	if not shapeOk then
 		log("problem lists don't match the stops and waypoints")
-		addRow(rows, _("Rail Doctor can't read this line's problems."))
+		addRow(rows, 0, _("Rail Doctor can't read this line's problems."))
 		return rows
 	end
 
@@ -590,7 +598,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		stops[i] = stopInfo(stop)
 		if stops[i].current == nil then
 			log("stop " .. i .. " " .. stops[i].name .. ": its terminal wasn't found")
-			addRow(rows, fmt(_("Can't find the terminal {station} uses."), { station = stops[i].name }))
+			addRow(rows, 0, fmt(_("Can't find the terminal {station} uses."), { station = stops[i].name }))
 			return rows
 		end
 	end
@@ -602,7 +610,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		waypoints[i] = {}
 		for __, wp in ipairs(stop.waypoints) do
 			numbered = numbered + 1
-			waypoints[i][#waypoints[i] + 1] = waypointEnd(track, wp.edgePos, fmt(_("waypoint {n}"), { n = tostring(numbered) }))
+			waypoints[i][#waypoints[i] + 1] = waypointEnd(track, wp.edgePos, fmt(_("Waypoint {n}"), { n = tostring(numbered) }))
 		end
 	end
 
@@ -657,7 +665,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	if track.timedOut then
 		log(string.format("out of time after %.0f ms", clock:getTime() / 1000))
 		if #broken > 0 then
-			addRow(rows, _("This network is too big for Rail Doctor to check quickly."), "font-scale-annotation")
+			addRow(rows, 0, _("This network is too big for Rail Doctor to check quickly."), "font-scale-annotation")
 		end
 		return rows
 	end
@@ -677,9 +685,9 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 
 	if not agree then
 		for __, i in ipairs(broken) do
-			addRow(rows, legTitle(i))
+			addRow(rows, 0, legTitle(i))
 		end
-		addRow(rows, _("Rail Doctor's track search doesn't agree with the game on this line, so it can't suggest anything."), "font-scale-annotation")
+		addRow(rows, 0, _("Rail Doctor's track search doesn't agree with the game on this line, so it can't suggest anything."), "font-scale-annotation")
 		log(string.format("%.1f ms", clock:getTime() / 1000))
 		return rows
 	end
@@ -704,14 +712,14 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	local fixes = suggest.solve(solverStops, broken, reach)
 	local anyChange = false
 	for __, fix in ipairs(fixes) do
-		addRow(rows, legTitle(fix.leg))
+		addRow(rows, 0, legTitle(fix.leg))
 		if fix.alreadyFixed then
-			addRow(rows, "    " .. _("Fixed by the change above"), "font-scale-annotation")
+			addRow(rows, 1, _("Fixed by the change above"), "font-scale-annotation")
 		elseif fix.found then
 			for __, change in ipairs(fix.changes) do
 				anyChange = true
 				local s = stops[change.stop]
-				addRow(rows, "    " .. fmt(_("Use {terminal} at {station}"), {
+				addRow(rows, 1, fmt(_("Use {terminal} at {station}"), {
 					terminal = terminalLabel(s.candidates[change.candidate]), station = s.name,
 				}), "font-scale-annotation")
 			end
@@ -723,24 +731,27 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				if problems[i][k].noPath then
 					-- a waypoint on the wrong track is the likeliest cause: ask about it first, once
 					local wp = ends[k + 1].piece ~= nil and ends[k + 1] or (ends[k].piece ~= nil and ends[k] or nil)
+					local level, orChange = 1, false
 					if wp ~= nil and not asked[wp] then
 						asked[wp] = true
-						addRow(rows, "    " .. fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction?"), {
+						orChange = true
+						addRow(rows, 1, fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction?"), {
 							from = ends[k].name, to = ends[k + 1].name, waypoint = wp.name,
 						}), "font-scale-annotation", endPosition(track, wp))
 					elseif #ends > 2 then
-						addRow(rows, "    " .. fmt(_("{from} → {to}:"), { from = ends[k].name, to = ends[k + 1].name }), "font-scale-annotation")
+						addRow(rows, 1, fmt(_("{from} → {to}:"), { from = ends[k].name, to = ends[k + 1].name }), "font-scale-annotation")
+						level = 2
 					end
-					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k))
+					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k), level, orChange)
 				end
 			end
 		end
 	end
 	if track.timedOut then
-		addRow(rows, _("Rail Doctor ran out of time; some legs weren't checked fully."), "font-scale-annotation")
+		addRow(rows, 0, _("Rail Doctor ran out of time; some legs weren't checked fully."), "font-scale-annotation")
 	end
 	if anyChange then
-		addRow(rows, _("Change terminals in Manage Line. If a mod assigns terminals automatically, turn that off for this line first."), "font-scale-annotation")
+		addRow(rows, 0, _("Change terminals in Manage Line. If a mod assigns terminals automatically, turn that off for this line first."), "font-scale-annotation")
 	end
 	log(string.format("%d broken legs, %d searches, %.1f ms", #broken, searches, clock:getTime() / 1000))
 	return rows
@@ -759,11 +770,12 @@ local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : Body
 			return rowsOrError as {Row}
 		end
 		log("error: " .. tostring(rowsOrError))
-		return { { text = _("Error (see log)"), class = "font-scale-body" } }
+		return { { level = 0, text = _("Error (see log)"), class = "font-scale-body" } }
 	end)
 	local children : {TreeNodeId} = {}
 	for __, row in ipairs(state:old()) do
-		local text = builtin.TextView{ meta = { class = row.class }, text = row.text }
+		local indent = string.rep("    ", row.level) .. ((row.pos == nil and row.level > 0) and "  " or "")
+		local text = builtin.TextView{ meta = { class = row.class }, text = indent .. row.text }
 		if row.pos ~= nil then
 			local pos = row.pos
 			children[#children + 1] = builtin.Button{
