@@ -494,6 +494,9 @@ local function addRow(rows : {Row}, level : integer, text : string, class? : str
 		zoom = zoom }
 end
 
+-- A spacer row's text: a no-break space, since a plain " " seemed to take no height in the card.
+local BLANK = "\194\160"
+
 -- A terminal's pin: far enough out to see the platform and the track beside it.
 local TERMINAL_ZOOM = 80
 
@@ -545,7 +548,7 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 	local blockers = r.found and blockersOn(track, r, v) or {}
 	log(string.format("%s: cheapest route passes %d signal(s) the wrong way (%d states)", label, #blockers, r.expanded))
 	local function orHeading(text : string)
-		addRow(rows, level, " ", "font-scale-annotation")   -- a small gap between the two ways to fix it
+		addRow(rows, level, BLANK, "font-scale-annotation")   -- a small gap between the two ways to fix it
 		addRow(rows, level, text, "font-scale-headline")
 		level = level + 1
 		if sub ~= nil then
@@ -820,7 +823,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		local fix = fixByLeg[i]
 		if fix ~= nil or hasModeProblem[i] or hasAltProblem[i] then
 			if #rows > 0 then
-				addRow(rows, 0, " ", "font-scale-body")   -- a gap between legs (an annotation-size blank is only a few pixels)
+				addRow(rows, 0, BLANK, "font-scale-body")   -- a gap between legs (an annotation-size blank is only a few pixels)
 			end
 			addRow(rows, 0, legTitle(i))
 			modeRows(i)
