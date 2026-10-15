@@ -46,7 +46,9 @@
   "Shows the platform track of the suggested terminal.": "Zeigt das Bahnsteiggleis des vorgeschlagenen Terminals.",
   "Trains go the long way round: {actual} instead of {best}": "Züge nehmen einen Umweg: {actual} statt {best}",
   "To shorten the line ({from} → {to} in all):": "So wird die Linie kürzer ({from} → {to} insgesamt):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Kein Terminalwechsel hilft: Die Terminals, die hier einen Abschnitt verkürzen, verlängern einen anderen. Gleisänderungen, etwa ein Gleiswechsel, können helfen."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Kein Terminalwechsel hilft: Die Terminals, die hier einen Abschnitt verkürzen, verlängern einen anderen. Gleisänderungen, etwa ein Gleiswechsel, können helfen.",
+  "The long way round goes out to here": "Bis hierhin führt der Umweg",
+  "Shows where the trains' way strays furthest from the shortest way.": "Zeigt, wo der Weg der Züge am weitesten vom kürzesten Weg abweicht."
  },
  "es": {
   "(The only other way runs against {count} one-way signals.)|one": "(La única otra ruta va contra {count} señal de sentido único.)",
@@ -91,7 +93,9 @@
   "Shows the platform track of the suggested terminal.": "Muestra la vía de andén de la terminal sugerida.",
   "Trains go the long way round: {actual} instead of {best}": "Los trenes dan un rodeo: {actual} en vez de {best}",
   "To shorten the line ({from} → {to} in all):": "Para acortar la línea ({from} → {to} en total):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Ningún cambio de terminal sirve: las terminales que acortan aquí un tramo alargan otro. Cambiar las vías, por ejemplo con un escape, puede ayudar."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Ningún cambio de terminal sirve: las terminales que acortan aquí un tramo alargan otro. Cambiar las vías, por ejemplo con un escape, puede ayudar.",
+  "The long way round goes out to here": "Hasta aquí llega el rodeo",
+  "Shows where the trains' way strays furthest from the shortest way.": "Muestra dónde el camino de los trenes se aleja más del más corto."
  },
  "fr": {
   "(The only other way runs against {count} one-way signals.)|one": "(Le seul autre chemin passe contre {count} signal à sens unique.)",
@@ -136,7 +140,9 @@
   "Shows the platform track of the suggested terminal.": "Montre la voie à quai du terminal proposé.",
   "Trains go the long way round: {actual} instead of {best}": "Les trains font un détour : {actual} au lieu de {best}",
   "To shorten the line ({from} → {to} in all):": "Pour raccourcir la ligne ({from} → {to} au total) :",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Aucun changement de terminal n'aide : les terminaux qui raccourcissent ici un tronçon en allongent un autre. Modifier les voies, par exemple avec une communication, peut aider."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Aucun changement de terminal n'aide : les terminaux qui raccourcissent ici un tronçon en allongent un autre. Modifier les voies, par exemple avec une communication, peut aider.",
+  "The long way round goes out to here": "Le détour va jusqu'ici",
+  "Shows where the trains' way strays furthest from the shortest way.": "Montre où le trajet des trains s'éloigne le plus du plus court."
  },
  "it": {
   "(The only other way runs against {count} one-way signals.)|one": "(L'unico altro percorso va contro {count} segnale a senso unico.)",
@@ -181,7 +187,9 @@
   "Shows the platform track of the suggested terminal.": "Mostra il binario del terminal suggerito.",
   "Trains go the long way round: {actual} instead of {best}": "I treni fanno il giro lungo: {actual} invece di {best}",
   "To shorten the line ({from} → {to} in all):": "Per accorciare la linea ({from} → {to} in totale):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Nessun cambio di terminal aiuta: i terminal che qui accorciano una tratta ne allungano un'altra. Modifiche ai binari, come una comunicazione, possono aiutare."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Nessun cambio di terminal aiuta: i terminal che qui accorciano una tratta ne allungano un'altra. Modifiche ai binari, come una comunicazione, possono aiutare.",
+  "The long way round goes out to here": "Il giro lungo arriva fin qui",
+  "Shows where the trains' way strays furthest from the shortest way.": "Mostra dove il percorso dei treni si allontana di più da quello più breve."
  },
  "ja": {
   "(The only other way runs against {count} one-way signals.)|other": "（ほかの経路は一方通行信号{count}基に逆らって進みます。）",
@@ -225,7 +233,9 @@
   "Shows the platform track of the suggested terminal.": "提案されたターミナルのホームの線路を表示します。",
   "Trains go the long way round: {actual} instead of {best}": "列車が遠回りしています：{best}で済むところ{actual}",
   "To shorten the line ({from} → {to} in all):": "路線を短くするには（全体で{from} → {to}）：",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "ターミナルの変更では改善しません：この区間を短くするターミナルにすると別の区間が長くなります。渡り線などの線路の変更が有効な場合があります。"
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "ターミナルの変更では改善しません：この区間を短くするターミナルにすると別の区間が長くなります。渡り線などの線路の変更が有効な場合があります。",
+  "The long way round goes out to here": "遠回りはここまで延びています",
+  "Shows where the trains' way strays furthest from the shortest way.": "列車の経路が最短経路から最も離れる場所を表示します。"
  },
  "ko": {
   "(The only other way runs against {count} one-way signals.)|other": "(다른 유일한 경로는 일방통행 신호기 {count}개를 거슬러 갑니다.)",
@@ -269,7 +279,9 @@
   "Shows the platform track of the suggested terminal.": "제안된 터미널의 승강장 선로를 보여 줍니다.",
   "Trains go the long way round: {actual} instead of {best}": "열차가 먼 길로 돌아갑니다: {best} 대신 {actual}",
   "To shorten the line ({from} → {to} in all):": "노선을 줄이려면(전체 {from} → {to}):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "터미널을 바꿔도 나아지지 않습니다: 여기서 구간을 줄이는 터미널은 다른 구간을 늘립니다. 건넘선 같은 선로 변경이 도움이 될 수 있습니다."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "터미널을 바꿔도 나아지지 않습니다: 여기서 구간을 줄이는 터미널은 다른 구간을 늘립니다. 건넘선 같은 선로 변경이 도움이 될 수 있습니다.",
+  "The long way round goes out to here": "돌아가는 길은 여기까지 갑니다",
+  "Shows where the trains' way strays furthest from the shortest way.": "열차의 경로가 가장 짧은 경로에서 가장 멀리 벗어나는 곳을 보여 줍니다."
  },
  "nl": {
   "(The only other way runs against {count} one-way signals.)|one": "(De enige andere route gaat tegen {count} eenrichtingssein in.)",
@@ -314,7 +326,9 @@
   "Shows the platform track of the suggested terminal.": "Toont het perronspoor van de voorgestelde terminal.",
   "Trains go the long way round: {actual} instead of {best}": "Treinen rijden om: {actual} in plaats van {best}",
   "To shorten the line ({from} → {to} in all):": "Om de lijn korter te maken ({from} → {to} in totaal):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Geen terminalwissel helpt: de terminals die hier een traject korter maken, maken een ander langer. Spoorwijzigingen, zoals een overloopwissel, kunnen helpen."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Geen terminalwissel helpt: de terminals die hier een traject korter maken, maken een ander langer. Spoorwijzigingen, zoals een overloopwissel, kunnen helpen.",
+  "The long way round goes out to here": "De omweg gaat tot hier",
+  "Shows where the trains' way strays furthest from the shortest way.": "Toont waar de route van de treinen het verst van de kortste route afwijkt."
  },
  "pl": {
   "(The only other way runs against {count} one-way signals.)|one": "(Jedyna inna droga prowadzi wbrew {count} sygnalizatorowi jednokierunkowemu.)",
@@ -360,7 +374,9 @@
   "Shows the platform track of the suggested terminal.": "Pokazuje tor peronowy proponowanego terminalu.",
   "Trains go the long way round: {actual} instead of {best}": "Pociągi jadą okrężną drogą: {actual} zamiast {best}",
   "To shorten the line ({from} → {to} in all):": "Aby skrócić linię (łącznie {from} → {to}):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Żadna zmiana terminali nie pomoże: terminale, które skracają tu odcinek, wydłużają inny. Mogą pomóc zmiany torów, np. przejazd międzytorowy."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Żadna zmiana terminali nie pomoże: terminale, które skracają tu odcinek, wydłużają inny. Mogą pomóc zmiany torów, np. przejazd międzytorowy.",
+  "The long way round goes out to here": "Okrężna droga sięga aż tutaj",
+  "Shows where the trains' way strays furthest from the shortest way.": "Pokazuje, gdzie trasa pociągów najbardziej oddala się od najkrótszej."
  },
  "pt_BR": {
   "(The only other way runs against {count} one-way signals.)|one": "(O único outro caminho vai contra {count} sinal de sentido único.)",
@@ -405,7 +421,9 @@
   "Shows the platform track of the suggested terminal.": "Mostra a via da plataforma do terminal sugerido.",
   "Trains go the long way round: {actual} instead of {best}": "Os trens fazem um desvio: {actual} em vez de {best}",
   "To shorten the line ({from} → {to} in all):": "Para encurtar a linha ({from} → {to} no total):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Nenhuma troca de terminal ajuda: os terminais que encurtam um trecho aqui alongam outro. Mudanças nos trilhos, como um travessão, podem ajudar."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Nenhuma troca de terminal ajuda: os terminais que encurtam um trecho aqui alongam outro. Mudanças nos trilhos, como um travessão, podem ajudar.",
+  "The long way round goes out to here": "O desvio vai até aqui",
+  "Shows where the trains' way strays furthest from the shortest way.": "Mostra onde o caminho dos trens mais se afasta do mais curto."
  },
  "ru": {
   "(The only other way runs against {count} one-way signals.)|one": "(Единственный другой путь идёт против {count} одностороннего семафора.)",
@@ -451,7 +469,9 @@
   "Shows the platform track of the suggested terminal.": "Показывает путь у платформы предложенного терминала.",
   "Trains go the long way round: {actual} instead of {best}": "Поезда едут в объезд: {actual} вместо {best}",
   "To shorten the line ({from} → {to} in all):": "Чтобы сократить маршрут (всего {from} → {to}):",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Смена терминалов не поможет: терминалы, сокращающие здесь один перегон, удлиняют другой. Может помочь изменение путей, например съезд."
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "Смена терминалов не поможет: терминалы, сокращающие здесь один перегон, удлиняют другой. Может помочь изменение путей, например съезд.",
+  "The long way round goes out to here": "Объезд доходит досюда",
+  "Shows where the trains' way strays furthest from the shortest way.": "Показывает, где путь поездов дальше всего уходит от кратчайшего."
  },
  "zh_CN": {
   "(The only other way runs against {count} one-way signals.)|other": "（唯一的另一条路要逆着{count}个单向信号灯行驶。）",
@@ -495,7 +515,9 @@
   "Shows the platform track of the suggested terminal.": "显示建议停靠位的站台轨道。",
   "Trains go the long way round: {actual} instead of {best}": "列车绕远路：{actual}，本可只需{best}",
   "To shorten the line ({from} → {to} in all):": "缩短线路（全程{from} → {to}）：",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "更改停靠位无济于事：能缩短这里某一区段的停靠位会使另一区段变长。修改轨道（例如加一个渡线）可能有帮助。"
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "更改停靠位无济于事：能缩短这里某一区段的停靠位会使另一区段变长。修改轨道（例如加一个渡线）可能有帮助。",
+  "The long way round goes out to here": "绕行最远到这里",
+  "Shows where the trains' way strays furthest from the shortest way.": "显示列车路线偏离最短路线最远的地方。"
  },
  "zh_TW": {
   "(The only other way runs against {count} one-way signals.)|other": "（唯一的另一條路要逆著{count}座單向號誌行駛。）",
@@ -539,6 +561,8 @@
   "Shows the platform track of the suggested terminal.": "顯示建議總站的月台軌道。",
   "Trains go the long way round: {actual} instead of {best}": "列車繞遠路：{actual}，本可只需{best}",
   "To shorten the line ({from} → {to} in all):": "縮短路線（全程{from} → {to}）：",
-  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "變更總站無濟於事：能縮短這裡某一區段的總站會使另一區段變長。修改軌道（例如加一個渡線）可能有幫助。"
+  "No terminal change helps: the terminals that shorten a leg here make another leg longer. Track changes, such as a crossover, may help.": "變更總站無濟於事：能縮短這裡某一區段的總站會使另一區段變長。修改軌道（例如加一個渡線）可能有幫助。",
+  "The long way round goes out to here": "繞行最遠到這裡",
+  "Shows where the trains' way strays furthest from the shortest way.": "顯示列車路線偏離最短路線最遠的地方。"
  }
 }
