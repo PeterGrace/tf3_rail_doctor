@@ -530,8 +530,9 @@ end
 -- stuck.
 -- level: the indent of its rows. orChange: the card has already named a likelier cause, so the signals are only the
 -- other way to fix it.
+-- sub: a label for this stretch inside the "or" block, when the block covers more than one stretch.
 local function reportStretch(rows : {Row}, track : Track, from : End, to : End, v : Variant, label : string, level : integer,
-		orChange : boolean)
+		orChange : boolean, sub? : string)
 	local r = searchBetween(track, from, to, v, false)
 	local blockers = r.found and blockersOn(track, r, v) or {}
 	log(string.format("%s: cheapest route passes %d signal(s) the wrong way (%d states)", label, #blockers, r.expanded))
@@ -539,6 +540,10 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 		addRow(rows, level, " ", "font-scale-annotation")   -- a small gap between the two ways to fix it
 		addRow(rows, level, text, "font-scale-headline")
 		level = level + 1
+		if sub ~= nil then
+			addRow(rows, level, sub, "font-scale-annotation")
+			level = level + 1
+		end
 	end
 	if #blockers == 0 or #blockers > MAX_SIGNALS_LISTED then
 		if orChange then
@@ -739,18 +744,28 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 					-- a waypoint on the wrong track is the likeliest cause: ask about it first, once
 					local wp = ends[k + 1].piece ~= nil and ends[k + 1] or (ends[k].piece ~= nil and ends[k] or nil)
 					local level, orChange = 1, false
+					local sub : string = nil
+					local stretchLabel = fmt(_("{from} → {to}:"), { from = ends[k].name, to = ends[k + 1].name })
 					if wp ~= nil and not asked[wp] then
 						asked[wp] = true
 						orChange = true
+						-- moving the waypoint also fixes the stretch after it, so changing signals means both stretches
+						if ends[k + 1] == wp and k + 1 <= #ends - 1 and problems[i][k + 1].noPath then
+							sub = stretchLabel
+						end
 						addRow(rows, 1, _("Either move the waypoint:"), "font-scale-headline")
 						addRow(rows, 2, fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction? (Waypoints only show in Manage Line.)"), {
 							from = ends[k].name, to = ends[k + 1].name, waypoint = wp.name,
 						}), "font-scale-annotation", endPosition(track, wp))
+					elseif wp ~= nil then
+						-- the far side of a waypoint already asked about: part of the same "or" block
+						addRow(rows, 2, stretchLabel, "font-scale-annotation")
+						level = 3
 					elseif #ends > 2 then
-						addRow(rows, 1, fmt(_("{from} → {to}:"), { from = ends[k].name, to = ends[k + 1].name }), "font-scale-annotation")
+						addRow(rows, 1, stretchLabel, "font-scale-annotation")
 						level = 2
 					end
-					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k), level, orChange)
+					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k), level, orChange, sub)
 				end
 			end
 		end
