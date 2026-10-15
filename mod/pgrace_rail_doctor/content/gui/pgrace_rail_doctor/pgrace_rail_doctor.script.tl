@@ -735,7 +735,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 					if wp ~= nil and not asked[wp] then
 						asked[wp] = true
 						orChange = true
-						addRow(rows, 1, fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction?"), {
+						addRow(rows, 1, fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction? (Waypoints only show in Manage Line.)"), {
 							from = ends[k].name, to = ends[k + 1].name, waypoint = wp.name,
 						}), "font-scale-annotation", endPosition(track, wp))
 					elseif #ends > 2 then
