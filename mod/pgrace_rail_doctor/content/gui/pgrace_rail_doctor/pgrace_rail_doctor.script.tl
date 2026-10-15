@@ -89,6 +89,197 @@ local function trainPath(from : NodeId, to : NodeId) : boolean
 	return path ~= nil and #(path as {any}) > 0
 end
 
+-- PROBE (remove before release): how track networks hang together, and the signals on a leg's route. Walks the
+-- track from one terminal node to another ignoring signals and direction, then logs the signals on that route.
+local probeNetworks : {Engine.Entity : Engine.Component.TransportNetwork} = {}
+
+local function probeNetwork(e : Engine.Entity) : Engine.Component.TransportNetwork
+	if probeNetworks[e] == nil then
+		local ok, tn = pcall(function() : Engine.Component.TransportNetwork
+			return api.engine.getComponent(e, api.type.ComponentType.TRANSPORT_NETWORK) as Engine.Component.TransportNetwork
+		end)
+		probeNetworks[e] = ok and tn as Engine.Component.TransportNetwork or nil
+	end
+	return probeNetworks[e]
+end
+
+local record ProbeComp
+	name : string
+	t : Engine.ComponentType
+end
+
+local function probeComponents(e : Engine.Entity) : string
+	local names : {string} = {}
+	local list : {ProbeComp} = {
+		{ name = "BASE_NODE", t = api.type.ComponentType.BASE_NODE },
+		{ name = "BASE_EDGE", t = api.type.ComponentType.BASE_EDGE },
+		{ name = "CONSTRUCTION", t = api.type.ComponentType.CONSTRUCTION },
+		{ name = "TRANSPORT_NETWORK", t = api.type.ComponentType.TRANSPORT_NETWORK },
+		{ name = "STATION", t = api.type.ComponentType.STATION },
+		{ name = "SIGNAL_LIST", t = api.type.ComponentType.SIGNAL_LIST },
+	}
+	for __, c in ipairs(list) do
+		local ok, comp = pcall(function() : any
+			return api.engine.getComponent(e, c.t)
+		end)
+		if ok and comp ~= nil then
+			names[#names + 1] = c.name
+		end
+	end
+	return tostring(e) .. "[" .. table.concat(names, ",") .. "]"
+end
+
+local function probeNodeKey(nd : NodeId) : string
+	return tostring(nd.entity) .. "." .. tostring(nd.index)
+end
+
+local record ProbeEdge
+	id : EdgeId
+	to : NodeId
+	forward : boolean   -- travelling from conns[1] to conns[2]
+end
+
+local probeShapeLogged = false
+
+-- The edges touching a node: in the node's own network, in the track segments of a base node, and in the
+-- construction a base node belongs to.
+local function probeEdgesAt(nd : NodeId) : {ProbeEdge}
+	local entities : {Engine.Entity} = { nd.entity }
+	pcall(function() : boolean
+		for __, s in ipairs(api.engine.system.streetSystem.getNodeTrackSegments(nd.entity) or {}) do
+			entities[#entities + 1] = s
+		end
+		return true
+	end)
+	pcall(function() : boolean
+		local con = api.engine.system.streetConnectorSystem.getConstructionEntityForNode(nd.entity)
+		if con ~= nil and con >= 0 then
+			entities[#entities + 1] = con
+		end
+		return true
+	end)
+	local out : {ProbeEdge} = {}
+	local seen : {Engine.Entity : boolean} = {}
+	for __, e in ipairs(entities) do
+		if not seen[e] then
+			seen[e] = true
+			local tn = probeNetwork(e)
+			for k, edge in ipairs(tn and tn.edges or {}) do
+				local ok, pair = pcall(function() : {NodeId}
+					return { edge.conns[1], edge.conns[2] }
+				end)
+				if ok then
+					local a, b = (pair as {NodeId})[1], (pair as {NodeId})[2]
+					if not probeShapeLogged and a ~= nil then
+						probeShapeLogged = true
+						log("probe: conns[1] is " .. type(a) .. " " .. tostring(a) .. " -> " .. probeNodeKey(a))
+					end
+					if a ~= nil and b ~= nil then
+						if a.entity == nd.entity and a.index == nd.index then
+							out[#out + 1] = { id = api.type.EdgeId.new(e, k - 1), to = b, forward = true }
+						elseif b.entity == nd.entity and b.index == nd.index then
+							out[#out + 1] = { id = api.type.EdgeId.new(e, k - 1), to = a, forward = false }
+						end
+					end
+				end
+			end
+		end
+	end
+	return out
+end
+
+local function probeSignal(id : EdgeId, reversed : boolean) : string
+	local ok, sig = pcall(function() : SignalId
+		return api.engine.system.signalSystem.getSignal(id, reversed)
+	end)
+	if not ok or sig == nil then
+		return nil
+	end
+	local s = sig as SignalId
+	if s.entity == nil or s.entity < 0 then
+		return nil
+	end
+	local kind = "?"
+	pcall(function() : boolean
+		local list = api.engine.getComponent(s.entity, api.type.ComponentType.SIGNAL_LIST) as Engine.Component.SignalList
+		kind = tostring(math.tointeger(list.signals[s.index + 1].type as any as number))
+		return true
+	end)
+	return string.format("list %s[%s] type %s", tostring(s.entity), tostring(s.index), kind)
+end
+
+local function probeLeg(label : string, from : NodeId, to : NodeId)
+	local ok, err = pcall(function() : boolean
+		local clock = api.type.Clock.new()
+		log("probe " .. label .. ": from node " .. probeNodeKey(from) .. " " .. probeComponents(from.entity)
+			.. " to node " .. probeNodeKey(to) .. " " .. probeComponents(to.entity))
+		local first = probeEdgesAt(from)
+		log("probe " .. label .. ": " .. #first .. " edges at the start node")
+		for __, pe in ipairs(first) do
+			log("probe   edge " .. tostring(pe.id.entity) .. ":" .. pe.id.index .. " " .. probeComponents(pe.id.entity)
+				.. " to " .. probeNodeKey(pe.to) .. " " .. probeComponents(pe.to.entity))
+		end
+
+		local target = probeNodeKey(to)
+		local parent : {string : ProbeEdge} = {}
+		local parentNode : {string : NodeId} = {}
+		local visited : {string : boolean} = { [probeNodeKey(from)] = true }
+		local queue : {NodeId} = { from }
+		local head, edges, found = 1, 0, false
+		while head <= #queue and edges < 20000 and not found and clock:getTime() < 300000 do   -- 300 ms cap
+			local nd = queue[head]
+			head = head + 1
+			for __, pe in ipairs(probeEdgesAt(nd)) do
+				edges = edges + 1
+				local key = probeNodeKey(pe.to)
+				if not visited[key] then
+					visited[key] = true
+					parent[key] = pe
+					parentNode[key] = nd
+					queue[#queue + 1] = pe.to
+					if key == target then
+						found = true
+					end
+				end
+			end
+		end
+		log(string.format("probe %s: reached=%s nodes=%d edges=%d %.1f ms", label, tostring(found), #queue, edges,
+			clock:getTime() / 1000))
+		if not found then
+			return true
+		end
+
+		local route : {ProbeEdge} = {}
+		local key = target
+		while parent[key] ~= nil do
+			table.insert(route, 1, parent[key])
+			key = probeNodeKey(parentNode[key])
+		end
+		local length = 0.0
+		for n, pe in ipairs(route) do
+			local tn = probeNetwork(pe.id.entity)
+			local edge = tn and tn.edges[pe.id.index + 1]
+			local pos = edge and api.engine.util.transport.calcPosition(edge.geometry, 0.5)
+			if edge ~= nil then
+				length = length + edge.geometry.length
+			end
+			-- reversed=false is the signal for traffic running along the edge (conns[1] -> conns[2])
+			local ours = probeSignal(pe.id, not pe.forward)
+			local against = probeSignal(pe.id, pe.forward)
+			if ours ~= nil or against ~= nil then
+				log(string.format("probe   route %d/%d at %.0f m (%s): ours={%s} against={%s} pos=(%.0f, %.0f)", n, #route,
+					length, probeComponents(pe.id.entity), tostring(ours), tostring(against),
+					pos and pos.x or 0, pos and pos.y or 0))
+			end
+		end
+		log(string.format("probe %s: route %d edges, %.0f m", label, #route, length))
+		return true
+	end)
+	if not ok then
+		log("probe " .. label .. " failed: " .. tostring(err))
+	end
+end
+
 local record Row
 	text : string
 	class : string
@@ -171,6 +362,10 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		end
 	end
 	logBestAssignment(lineEntity, line)
+	for __, i in ipairs(broken) do
+		local a, b = stops[i], stops[i % n + 1]
+		probeLeg("leg " .. i, a.candidates[a.current].node, b.candidates[b.current].node)   -- PROBE
+	end
 
 	if #broken == 0 then
 		return rows
