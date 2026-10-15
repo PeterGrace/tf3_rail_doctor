@@ -63,4 +63,81 @@ function route.search(starts : {PgraceRailDoctorRoute.Step}, isGoal : function(s
 	return { found = false, cost = -1, keys = {}, expanded = expanded }
 end
 
+-- A binary heap of {key, length}, smallest length on top.
+local record Entry
+	key : string
+	length : number
+end
+
+local function heapPush(heap : {Entry}, e : Entry)
+	heap[#heap + 1] = e
+	local i = #heap
+	while i > 1 do
+		local parent = math.floor(i / 2)
+		if heap[parent].length <= heap[i].length then
+			break
+		end
+		heap[parent], heap[i] = heap[i], heap[parent]
+		i = parent
+	end
+end
+
+local function heapPop(heap : {Entry}) : Entry
+	local top = heap[1]
+	local last = table.remove(heap)
+	if #heap > 0 then
+		heap[1] = last
+		local i = 1
+		while true do
+			local l, r, smallest = 2 * i, 2 * i + 1, i
+			if l <= #heap and heap[l].length < heap[smallest].length then
+				smallest = l
+			end
+			if r <= #heap and heap[r].length < heap[smallest].length then
+				smallest = r
+			end
+			if smallest == i then
+				break
+			end
+			heap[smallest], heap[i] = heap[i], heap[smallest]
+			i = smallest
+		end
+	end
+	return top
+end
+
+function route.shortest(starts : {PgraceRailDoctorRoute.Weighted}, goalOf : function(string) : string, goalCount : integer, next : function(string) : {PgraceRailDoctorRoute.Weighted}, maxExpanded : integer) : PgraceRailDoctorRoute.Distances
+	local best : {string : number} = {}
+	local done : {string : boolean} = {}
+	local heap : {Entry} = {}
+	for __, s in ipairs(starts) do
+		if best[s.key] == nil or s.length < best[s.key] then
+			best[s.key] = s.length
+			heapPush(heap, { key = s.key, length = s.length })
+		end
+	end
+	local found : {string : number} = {}
+	local count, expanded = 0, 0
+	while #heap > 0 and count < goalCount and expanded < maxExpanded do
+		local e = heapPop(heap)
+		if not done[e.key] and e.length == best[e.key] then
+			done[e.key] = true
+			expanded = expanded + 1
+			local goal = goalOf(e.key)
+			if goal ~= nil and found[goal] == nil then
+				found[goal] = e.length
+				count = count + 1
+			end
+			for __, step in ipairs(next(e.key) or {}) do
+				local length = e.length + step.length
+				if not done[step.key] and (best[step.key] == nil or length < best[step.key]) then
+					best[step.key] = length
+					heapPush(heap, { key = step.key, length = length })
+				end
+			end
+		end
+	end
+	return { found = found, expanded = expanded }
+end
+
 return route

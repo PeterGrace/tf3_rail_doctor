@@ -60,3 +60,49 @@ t.test("search: the start can be the goal", function()
 	t.eq(r.found, true)
 	t.eq(table.concat(r.keys, ","), "a")
 end)
+
+-- weighted graph: { a = { {"b", 10}, ... } }
+local function wgraph(g)
+	return function(key)
+		local out = {}
+		for _, e in ipairs(g[key] or {}) do out[#out + 1] = { key = e[1], length = e[2] } end
+		return out
+	end
+end
+
+local function goals(map) return function(k) return map[k] end end
+
+t.test("shortest: finds the shortest length to each goal", function()
+	local g = wgraph({ a = { { "b", 5 }, { "c", 1 } }, c = { { "b", 1 }, { "d", 10 } }, b = { { "d", 2 } } })
+	local r = route.shortest({ { key = "a", length = 0 } }, goals({ b = "B", d = "D" }), 2, g, 100)
+	t.eq(r.found.B, 2)
+	t.eq(r.found.D, 4)
+end)
+
+t.test("shortest: several states can be the same goal; the nearest counts", function()
+	local g = wgraph({ a = { { "x1", 7 }, { "x2", 3 } } })
+	local r = route.shortest({ { key = "a", length = 0 } }, goals({ x1 = "X", x2 = "X" }), 1, g, 100)
+	t.eq(r.found.X, 3)
+end)
+
+t.test("shortest: start lengths count, and unreachable goals are missing", function()
+	local g = wgraph({ s1 = { { "g", 1 } }, s2 = { { "g", 1 } } })
+	local r = route.shortest({ { key = "s1", length = 10 }, { key = "s2", length = 2 } }, goals({ g = "G", z = "Z" }), 2, g, 100)
+	t.eq(r.found.G, 3)
+	t.eq(r.found.Z, nil)
+end)
+
+t.test("shortest: stops once every goal is found", function()
+	local r = route.shortest({ { key = "0", length = 0 } }, goals({ ["3"] = "G" }), 1, function(k)
+		return { { key = tostring(tonumber(k) + 1), length = 1 } }
+	end, 1000)
+	t.eq(r.found.G, 3)
+	t.eq(r.expanded <= 4, true)
+end)
+
+t.test("shortest: gives up after maxExpanded", function()
+	local r = route.shortest({ { key = "0", length = 0 } }, goals({}), 1, function(k)
+		return { { key = tostring(tonumber(k) + 1), length = 1 } }
+	end, 30)
+	t.eq(r.expanded, 30)
+end)
