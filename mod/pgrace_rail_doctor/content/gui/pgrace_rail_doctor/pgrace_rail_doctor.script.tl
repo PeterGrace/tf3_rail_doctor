@@ -378,7 +378,38 @@ local function waypointEnd(track : Track, edgeId : EdgeId, name : string) : End
 			dirs[#dirs + 1] = forward
 		end
 	end
-	log(string.format("waypoint %s on piece %s: %d direction(s) from its signal", name, tostring(edgeId.entity), #dirs))
+	log(string.format("waypoint %s on piece %s edge %s: %d direction(s) from its signal", name, tostring(edgeId.entity),
+		tostring(edgeId.index), #dirs))
+	-- PROBE (remove before release): what's attached to the waypoint's piece, and how a waypoint's direction reads
+	pcall(function() : boolean
+		local be = api.engine.getComponent(edgeId.entity, api.type.ComponentType.BASE_EDGE) as Engine.Component.BaseEdge
+		local p = piece(track, edgeId.entity)
+		log(string.format("  piece node0=%s node1=%s, %d objects, %d edges", tostring(be.node0), tostring(be.node1),
+			be.objects and #be.objects or -1, p and p.edgeCount or -1))
+		for __, obj in ipairs(be.objects or {}) do
+			local entity, kind = obj[1], obj[2]
+			local list = api.engine.getComponent(entity, api.type.ComponentType.SIGNAL_LIST) as Engine.Component.SignalList
+			local parts : {string} = {}
+			for i, sig in ipairs(list and list.signals or {}) do
+				local pr : any = sig.edgePr
+				local okA, a = pcall(function() : any return (pr as {any})[1] end)
+				local okB, b = pcall(function() : any return (pr as {any})[2] end)
+				local okC, c = pcall(function() : any return (pr as {string : any}).edgeId end)
+				local okD, d = pcall(function() : any return (pr as {string : any}).dir end)
+				local edgeText = "?"
+				pcall(function() : boolean
+					local e = (okA and a or c) as EdgeId
+					edgeText = tostring(e.entity) .. ":" .. tostring(e.index)
+					return true
+				end)
+				parts[#parts + 1] = string.format("sig%d type=%s edge=%s [2]=%s dir=%s", i, tostring(sig.type), edgeText,
+					tostring(okB and b or "-"), tostring(okD and d or "-"))
+			end
+			log(string.format("  object %s kind=%s name=%s %s", tostring(entity), tostring(kind), entityName(entity),
+				table.concat(parts, "; ")))
+		end
+		return true
+	end)
 	if #dirs == 0 then
 		dirs = { true, false }
 	end
