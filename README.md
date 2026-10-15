@@ -24,8 +24,8 @@ search agrees with the game on every stretch. Terminal suggestions come from a s
 terminal helps, a 0/1-cost route search names the fewest signals to change, or shows where trains get stuck.
 
 For lines without a problem, the detour check measures every leg for every pair of terminals (Dijkstra over the same
-track graph, a few searches per frame), flags legs at least 25% and 500 m longer than their best, and picks the
-terminals with the shortest round trip (`detour.tl`).
+track graph, a few searches per frame), flags legs at least 25% and 500 m longer than their best, pins the point of
+the trains' route furthest from the shortest one, and picks the terminals with the shortest round trip (`detour.tl`).
 
 ## Layout
 
