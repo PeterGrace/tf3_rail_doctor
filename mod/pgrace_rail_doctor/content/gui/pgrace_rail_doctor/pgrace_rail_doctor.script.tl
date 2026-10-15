@@ -278,6 +278,7 @@ local record End
 	piece : Engine.Entity
 	dirs : {boolean}
 	name : string
+	pos : Vec3f   -- waypoints: where it is
 end
 
 local function arrivalNode(track : Track, key : string) : Engine.Entity
@@ -364,56 +365,23 @@ local function endPosition(track : Track, e : End) : Vec3f
 	if e.node ~= nil then
 		return nodePosition(e.node)
 	end
+	if e.pos ~= nil then
+		return e.pos
+	end
 	local p = piece(track, e.piece)
 	return p and p.mid
 end
 
--- The directions a train may pass a line's waypoint in: the way the waypoint signal on its piece faces (type 2;
--- getSignal(edge, true) is the one for trains running node0 -> node1, see blocker), or both if there's none.
-local function waypointEnd(track : Track, edgeId : EdgeId, name : string) : End
-	local dirs : {boolean} = {}
-	for __, forward in ipairs({ true, false }) do
-		local s = signalOn(track, edgeId.entity, forward)
-		if s ~= nil and s.typeText == "2" then
-			dirs[#dirs + 1] = forward
-		end
-	end
-	log(string.format("waypoint %s on piece %s edge %s: %d direction(s) from its signal", name, tostring(edgeId.entity),
-		tostring(edgeId.index), #dirs))
-	-- PROBE (remove before release): what's attached to the waypoint's piece, and how a waypoint's direction reads
-	pcall(function() : boolean
-		local be = api.engine.getComponent(edgeId.entity, api.type.ComponentType.BASE_EDGE) as Engine.Component.BaseEdge
-		local p = piece(track, edgeId.entity)
-		log(string.format("  piece node0=%s node1=%s, %d objects, %d edges", tostring(be.node0), tostring(be.node1),
-			be.objects and #be.objects or -1, p and p.edgeCount or -1))
-		for __, obj in ipairs(be.objects or {}) do
-			local entity, kind = obj[1], obj[2]
-			local list = api.engine.getComponent(entity, api.type.ComponentType.SIGNAL_LIST) as Engine.Component.SignalList
-			local parts : {string} = {}
-			for i, sig in ipairs(list and list.signals or {}) do
-				local pr : any = sig.edgePr
-				local okA, a = pcall(function() : any return (pr as {any})[1] end)
-				local okB, b = pcall(function() : any return (pr as {any})[2] end)
-				local okC, c = pcall(function() : any return (pr as {string : any}).edgeId end)
-				local okD, d = pcall(function() : any return (pr as {string : any}).dir end)
-				local edgeText = "?"
-				pcall(function() : boolean
-					local e = (okA and a or c) as EdgeId
-					edgeText = tostring(e.entity) .. ":" .. tostring(e.index)
-					return true
-				end)
-				parts[#parts + 1] = string.format("sig%d type=%s edge=%s [2]=%s dir=%s", i, tostring(sig.type), edgeText,
-					tostring(okB and b or "-"), tostring(okD and d or "-"))
-			end
-			log(string.format("  object %s kind=%s name=%s %s", tostring(entity), tostring(kind), entityName(entity),
-				table.concat(parts, "; ")))
-		end
-		return true
+-- A line's waypoint is only a spot on the track (Waypoint.edgePos): nothing is attached to the track there and it has
+-- no direction, so a train may pass it either way (verified on the test map, scenario J).
+local function waypointEnd(track : Track, edgePos : EdgePos, name : string) : End
+	local e = edgePos.edgeId.entity
+	local ok, pos = pcall(function() : Vec3f
+		local tn = api.engine.getComponent(e, api.type.ComponentType.TRANSPORT_NETWORK) as Engine.Component.TransportNetwork
+		return api.engine.util.transport.calcPosition(tn.edges[edgePos.edgeId.index + 1].geometry, edgePos.param)
 	end)
-	if #dirs == 0 then
-		dirs = { true, false }
-	end
-	return { piece = edgeId.entity, dirs = dirs, name = name }
+	local p = piece(track, e)
+	return { piece = e, dirs = { true, false }, name = name, pos = (ok and pos ~= nil) and pos as Vec3f or (p and p.mid) }
 end
 
 local record Frontier
@@ -634,7 +602,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		waypoints[i] = {}
 		for __, wp in ipairs(stop.waypoints) do
 			numbered = numbered + 1
-			waypoints[i][#waypoints[i] + 1] = waypointEnd(track, wp.edgePos.edgeId, fmt(_("waypoint {n}"), { n = tostring(numbered) }))
+			waypoints[i][#waypoints[i] + 1] = waypointEnd(track, wp.edgePos, fmt(_("waypoint {n}"), { n = tostring(numbered) }))
 		end
 	end
 
@@ -750,9 +718,17 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		else
 			local i = fix.leg
 			local ends = currentEnds(i)
+			local asked : {End : boolean} = {}
 			for k = 1, #ends - 1 do
 				if problems[i][k].noPath then
-					if #ends > 2 then
+					-- a waypoint on the wrong track is the likeliest cause: ask about it first, once
+					local wp = ends[k + 1].piece ~= nil and ends[k + 1] or (ends[k].piece ~= nil and ends[k] or nil)
+					if wp ~= nil and not asked[wp] then
+						asked[wp] = true
+						addRow(rows, "    " .. fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction?"), {
+							from = ends[k].name, to = ends[k + 1].name, waypoint = wp.name,
+						}), "font-scale-annotation", endPosition(track, wp))
+					elseif #ends > 2 then
 						addRow(rows, "    " .. fmt(_("{from} → {to}:"), { from = ends[k].name, to = ends[k + 1].name }), "font-scale-annotation")
 					end
 					reportStretch(rows, track, ends[k], ends[k + 1], v, string.format("stretch %d.%d", i, k))
