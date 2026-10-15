@@ -482,11 +482,17 @@ local record Row
 	class : string
 	pos : Vec3f   -- set: the row is a button with a locate pin that moves the camera here
 	tooltip : string
+	zoom : number   -- camera distance for the pin; nil: as close as the camera goes
 end
 
-local function addRow(rows : {Row}, level : integer, text : string, class? : string, pos? : Vec3f, tooltip? : string)
-	rows[#rows + 1] = { level = level, text = text, class = class or "font-scale-body", pos = pos, tooltip = tooltip }
+local function addRow(rows : {Row}, level : integer, text : string, class? : string, pos? : Vec3f, tooltip? : string,
+		zoom? : number)
+	rows[#rows + 1] = { level = level, text = text, class = class or "font-scale-body", pos = pos, tooltip = tooltip,
+		zoom = zoom }
 end
+
+-- A terminal's pin: far enough out to see the platform and the track beside it.
+local TERMINAL_ZOOM = 80
 
 -- Where a signal stands: its own bounding box if it has one, else the middle of its piece of track.
 local function signalPosition(list : Engine.Entity, fallback : Vec3f) : Vec3f
@@ -799,7 +805,8 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				log(string.format("stretch %d.%d: alternative problem (from %s, to %s)", i, k, tostring(fromAlt), tostring(toAlt)))
 				addRow(rows, 1, _("Either drop the alternative:"), "font-scale-headline")
 				addRow(rows, 2, text, "font-scale-annotation", nodePosition(toC and to.node or from.node),
-					_("Trains use alternatives when the main terminal is busy. Remove it from the stop's alternatives in Manage Line."))
+					_("Trains use alternatives when the main terminal is busy. Remove it from the stop's alternatives in Manage Line."),
+					TERMINAL_ZOOM)
 				reportStretch(rows, track, from, to, v, string.format("stretch %d.%d (alternative)", i, k), 1, true)
 			end
 		end
@@ -824,10 +831,12 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 			for __, change in ipairs(fix.changes) do
 				anyChange = true
 				local s = stops[change.stop]
+				local suggested = s.candidates[change.candidate]
 				addRow(rows, 1, fmt(_("Use {terminal} at {station} (now {current})"), {
-					terminal = terminalLabel(s.candidates[change.candidate]), station = s.name,
+					terminal = terminalLabel(suggested), station = s.name,
 					current = terminalLabel(s.candidates[s.current]),
-				}), "font-scale-annotation")
+				}), "font-scale-annotation", nodePosition(suggested.node.entity),
+					_("Shows the platform track of the suggested terminal."), TERMINAL_ZOOM)
 			end
 		else
 			local ends = currentEnds(i)
@@ -894,7 +903,7 @@ local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : Body
 	for __, row in ipairs(state:old()) do
 		local indent = string.rep("  ", row.level)
 		if row.pos ~= nil then
-			local pos = row.pos
+			local pos, zoom = row.pos, row.zoom or 10
 			children[#children + 1] = builtin.Button{
 				meta = { tooltip = row.tooltip or _("Show on the map") },
 				content = builtin.BoxLayout{
@@ -910,8 +919,8 @@ local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : Body
 					},
 				},
 				onClick = function()
-					-- as close as the camera goes: it clamps to its own minimum distance
-					api.gui.camera.focusPosition(pos, 10)
+					-- 10 is as close as the camera goes: it clamps to its own minimum distance
+					api.gui.camera.focusPosition(pos, zoom)
 				end,
 			}
 		else

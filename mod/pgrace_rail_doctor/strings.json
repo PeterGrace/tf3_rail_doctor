@@ -42,7 +42,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {distance} nach {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint} ist von {from} aus nicht erreichbar"
+  "{waypoint} can't be reached from {from}": "{waypoint} ist von {from} aus nicht erreichbar",
+  "Shows the platform track of the suggested terminal.": "Zeigt das Bahnsteiggleis des vorgeschlagenen Terminals."
  },
  "es": {
   "(The only other way runs against {count} one-way signals.)|one": "(La única otra ruta va contra {count} señal de sentido único.)",
@@ -83,7 +84,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {distance} después de {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "No se puede llegar a {waypoint} desde {from}"
+  "{waypoint} can't be reached from {from}": "No se puede llegar a {waypoint} desde {from}",
+  "Shows the platform track of the suggested terminal.": "Muestra la vía de andén de la terminal sugerida."
  },
  "fr": {
   "(The only other way runs against {count} one-way signals.)|one": "(Le seul autre chemin passe contre {count} signal à sens unique.)",
@@ -124,7 +126,8 @@
   "{from} → {to}:": "{from} → {to} :",
   "{name}, {distance} after {station}": "{name}, {distance} après {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint} est inaccessible depuis {from}"
+  "{waypoint} can't be reached from {from}": "{waypoint} est inaccessible depuis {from}",
+  "Shows the platform track of the suggested terminal.": "Montre la voie à quai du terminal proposé."
  },
  "it": {
   "(The only other way runs against {count} one-way signals.)|one": "(L'unico altro percorso va contro {count} segnale a senso unico.)",
@@ -165,7 +168,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {distance} dopo {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint} non è raggiungibile da {from}"
+  "{waypoint} can't be reached from {from}": "{waypoint} non è raggiungibile da {from}",
+  "Shows the platform track of the suggested terminal.": "Mostra il binario del terminal suggerito."
  },
  "ja": {
   "(The only other way runs against {count} one-way signals.)|other": "（ほかの経路は一方通行信号{count}基に逆らって進みます。）",
@@ -205,7 +209,8 @@
   "{from} → {to}:": "{from} → {to}：",
   "{name}, {distance} after {station}": "{name}、{station}から{distance}",
   "{reason} ({from} → {to})": "{reason}（{from} → {to}）",
-  "{waypoint} can't be reached from {from}": "{waypoint}へは{from}から到達できません"
+  "{waypoint} can't be reached from {from}": "{waypoint}へは{from}から到達できません",
+  "Shows the platform track of the suggested terminal.": "提案されたターミナルのホームの線路を表示します。"
  },
  "ko": {
   "(The only other way runs against {count} one-way signals.)|other": "(다른 유일한 경로는 일방통행 신호기 {count}개를 거슬러 갑니다.)",
@@ -245,7 +250,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {station}에서 {distance}",
   "{reason} ({from} → {to})": "{reason}({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint}에 {from}에서 갈 수 없습니다"
+  "{waypoint} can't be reached from {from}": "{waypoint}에 {from}에서 갈 수 없습니다",
+  "Shows the platform track of the suggested terminal.": "제안된 터미널의 승강장 선로를 보여 줍니다."
  },
  "nl": {
   "(The only other way runs against {count} one-way signals.)|one": "(De enige andere route gaat tegen {count} eenrichtingssein in.)",
@@ -286,7 +292,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {distance} na {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint} is niet bereikbaar vanaf {from}"
+  "{waypoint} can't be reached from {from}": "{waypoint} is niet bereikbaar vanaf {from}",
+  "Shows the platform track of the suggested terminal.": "Toont het perronspoor van de voorgestelde terminal."
  },
  "pl": {
   "(The only other way runs against {count} one-way signals.)|one": "(Jedyna inna droga prowadzi wbrew {count} sygnalizatorowi jednokierunkowemu.)",
@@ -328,7 +335,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {distance} za {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint} jest nieosiągalny z {from}"
+  "{waypoint} can't be reached from {from}": "{waypoint} jest nieosiągalny z {from}",
+  "Shows the platform track of the suggested terminal.": "Pokazuje tor peronowy proponowanego terminalu."
  },
  "pt_BR": {
   "(The only other way runs against {count} one-way signals.)|one": "(O único outro caminho vai contra {count} sinal de sentido único.)",
@@ -369,7 +377,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {distance} depois de {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint} não pode ser alcançado a partir de {from}"
+  "{waypoint} can't be reached from {from}": "{waypoint} não pode ser alcançado a partir de {from}",
+  "Shows the platform track of the suggested terminal.": "Mostra a via da plataforma do terminal sugerido."
  },
  "ru": {
   "(The only other way runs against {count} one-way signals.)|one": "(Единственный другой путь идёт против {count} одностороннего семафора.)",
@@ -411,7 +420,8 @@
   "{from} → {to}:": "{from} → {to}:",
   "{name}, {distance} after {station}": "{name}, {distance} после {station}",
   "{reason} ({from} → {to})": "{reason} ({from} → {to})",
-  "{waypoint} can't be reached from {from}": "{waypoint} недоступна из {from}"
+  "{waypoint} can't be reached from {from}": "{waypoint} недоступна из {from}",
+  "Shows the platform track of the suggested terminal.": "Показывает путь у платформы предложенного терминала."
  },
  "zh_CN": {
   "(The only other way runs against {count} one-way signals.)|other": "（唯一的另一条路要逆着{count}个单向信号灯行驶。）",
@@ -451,7 +461,8 @@
   "{from} → {to}:": "{from} → {to}：",
   "{name}, {distance} after {station}": "{name}，{station}之后{distance}",
   "{reason} ({from} → {to})": "{reason}（{from} → {to}）",
-  "{waypoint} can't be reached from {from}": "无法从{from}到达{waypoint}"
+  "{waypoint} can't be reached from {from}": "无法从{from}到达{waypoint}",
+  "Shows the platform track of the suggested terminal.": "显示建议停靠位的站台轨道。"
  },
  "zh_TW": {
   "(The only other way runs against {count} one-way signals.)|other": "（唯一的另一條路要逆著{count}座單向號誌行駛。）",
@@ -491,6 +502,7 @@
   "{from} → {to}:": "{from} → {to}：",
   "{name}, {distance} after {station}": "{name}，{station}之後{distance}",
   "{reason} ({from} → {to})": "{reason}（{from} → {to}）",
-  "{waypoint} can't be reached from {from}": "無法從{from}抵達{waypoint}"
+  "{waypoint} can't be reached from {from}": "無法從{from}抵達{waypoint}",
+  "Shows the platform track of the suggested terminal.": "顯示建議總站的月台軌道。"
  }
 }
