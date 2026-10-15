@@ -569,7 +569,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		addRow(rows, _("Rail Doctor ran out of time; some legs weren't checked fully."), "font-scale-annotation")
 	end
 	if anyChange then
-		addRow(rows, _("Untick \"Assign terminals automatically\" in Manage Line before changing terminals."), "font-scale-annotation")
+		addRow(rows, _("Change terminals in Manage Line. If a mod assigns terminals automatically, turn that off for this line first."), "font-scale-annotation")
 	end
 	log(string.format("%d broken legs, %d searches, %.1f ms", #broken, searches, clock:getTime() / 1000))
 	return rows
