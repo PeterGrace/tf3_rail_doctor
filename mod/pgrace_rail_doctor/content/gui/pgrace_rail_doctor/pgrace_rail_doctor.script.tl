@@ -5,6 +5,7 @@ local line_eow = ug_require "::/gui/entity_window/line/line_eow.script.tl" as Li
 local line_util = ug_require "::/gui/line_vehicle_mgmt/line_util.tl" as LineUtil
 local suggest = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/suggest.tl" as PgraceRailDoctorSuggest
 local route = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/route.tl" as PgraceRailDoctorRoute
+local plural = ug_require "pgrace_rail_doctor::/gui/pgrace_rail_doctor/plural.tl" as PgraceRailDoctorPlural
 
 -- A line window card for rail lines with legs that have no path: which terminals would give them one, and which
 -- one-way signals block a leg that no terminal fixes.
@@ -18,6 +19,24 @@ local function fmt(text : string, values : {string : string}) : string
 	return (text:gsub("{(%w+)}", function(k : string) : string
 		return values[k] or ("{" .. k .. "}")
 	end))
+end
+
+-- A count in the form the player's language uses for it. Each form is its own key ("...|one", "|few", "|many",
+-- "|other"); a language translates only the forms its plural rule uses (tools/release_check.py knows which).
+local record PluralForms
+	one : string
+	few : string
+	many : string
+	other : string
+end
+
+local function countText(count : integer, forms : PluralForms) : string
+	local ok, code = pcall(function() : string
+		return app.getUserProfile():getLanguage().code
+	end)
+	local category = plural.category(ok and code as string or "en", count)
+	local template = (forms as {string : string})[category] or forms.other
+	return (template:gsub("{count}", function() : string return tostring(count) end))
 end
 
 local function entityName(e : Engine.Entity) : string
@@ -454,34 +473,6 @@ local function blockersOn(track : Track, result : PgraceRailDoctorRoute.Result, 
 	return out
 end
 
--- PROBE (remove before release): the route the search took, piece by piece, with every edge's signals.
-local function dumpRoute(track : Track, label : string, result : PgraceRailDoctorRoute.Result)
-	log("route " .. label .. ": " .. #result.keys .. " pieces")
-	for n, key in ipairs(result.keys) do
-		local e, forward = parseKey(key)
-		local p = piece(track, e)
-		local parts : {string} = {}
-		local ok, err = pcall(function() : boolean
-			local tn = api.engine.getComponent(e, api.type.ComponentType.TRANSPORT_NETWORK) as Engine.Component.TransportNetwork
-			for k, edge in ipairs(tn.edges) do
-				local sigs : {string} = {}
-				for __, r in ipairs({ false, true }) do
-					local id = api.engine.system.signalSystem.getSignal(api.type.EdgeId.new(e, k - 1), r)
-					if id ~= nil and id.entity ~= nil and id.entity >= 0 then
-						sigs[#sigs + 1] = (r and "R=" or "F=") .. tostring(id.entity) .. "[" .. tostring(id.index) .. "]"
-					end
-				end
-				parts[#parts + 1] = string.format("e%d %s.%s>%s.%s {%s}", k - 1, tostring(edge.conns[1].entity),
-					tostring(edge.conns[1].index), tostring(edge.conns[2].entity), tostring(edge.conns[2].index),
-					table.concat(sigs, " "))
-			end
-			return true
-		end)
-		log(string.format("  %d %s node0=%s node1=%s len=%.0f %s", n, key, tostring(p and p.node0), tostring(p and p.node1),
-			p and p.length or 0, ok and table.concat(parts, "; ") or ("<" .. tostring(err) .. ">")))
-	end
-end
-
 ---------------------------------------------------------------------------------------------------------------------
 -- The card
 
@@ -567,8 +558,11 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 			addRow(rows, level, _("No terminals work, and no track leads there"), "font-scale-annotation")
 		end
 		if #blockers > 0 then
-			addRow(rows, level, fmt(_("(The only other way runs against {count} one-way signals.)"), {
-				count = tostring(#blockers),
+			addRow(rows, level, countText(#blockers, {
+				one = _("(The only other way runs against {count} one-way signals.)|one"),
+				few = _("(The only other way runs against {count} one-way signals.)|few"),
+				many = _("(The only other way runs against {count} one-way signals.)|many"),
+				other = _("(The only other way runs against {count} one-way signals.)|other"),
 			}), "font-scale-annotation")
 		end
 		return
@@ -699,9 +693,6 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				parts[#parts + 1] = string.format("%d.%d game=%s ours=%s(%d)", i, k, gameNo and "NO" or "ok", r.found and "ok" or "NO", r.expanded)
 				if r.found == gameNo then
 					agree = false
-					if r.found then
-						dumpRoute(track, string.format("stretch %d.%d (game says no path)", i, k), r)   -- PROBE
-					end
 				end
 			end
 		end
