@@ -819,7 +819,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 		local fix = fixByLeg[i]
 		if fix ~= nil or hasModeProblem[i] or hasAltProblem[i] then
 			if #rows > 0 then
-				addRow(rows, 0, " ", "font-scale-annotation")   -- a small gap between legs
+				addRow(rows, 0, " ", "font-scale-body")   -- a gap between legs (an annotation-size blank is only a few pixels)
 			end
 			addRow(rows, 0, legTitle(i))
 			modeRows(i)
