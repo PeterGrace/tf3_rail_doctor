@@ -375,11 +375,24 @@ end
 local record Row
 	text : string
 	class : string
-	pos : Vec3f   -- set: the row is a button that moves the camera here
+	pos : Vec3f            -- set: the row is a button that moves the camera here
+	entity : Engine.Entity -- and opens this entity's window
 end
 
-local function addRow(rows : {Row}, text : string, class? : string, pos? : Vec3f)
-	rows[#rows + 1] = { text = text, class = class or "font-scale-body", pos = pos }
+local function addRow(rows : {Row}, text : string, class? : string, pos? : Vec3f, entity? : Engine.Entity)
+	rows[#rows + 1] = { text = text, class = class or "font-scale-body", pos = pos, entity = entity }
+end
+
+-- Where a signal stands: its own bounding box if it has one, else the middle of its piece of track.
+local function signalPosition(list : Engine.Entity, fallback : Vec3f) : Vec3f
+	local ok, pos = pcall(function() : Vec3f
+		local bv = api.engine.getComponent(list, api.type.ComponentType.BOUNDING_VOLUME) as Engine.Component.BoundingVolume
+		if bv == nil then
+			return nil
+		end
+		return api.type.Vec3f.new(0.5 * (bv.bbox.min.x + bv.bbox.max.x), 0.5 * (bv.bbox.min.y + bv.bbox.max.y), 0.5 * (bv.bbox.min.z + bv.bbox.max.z))
+	end)
+	return (ok and pos ~= nil) and pos as Vec3f or fallback
 end
 
 -- Logged for comparison with our suggestions.
@@ -548,7 +561,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 					b.signal.typeText, b.distance, b.pos.x, b.pos.y))
 				addRow(rows, "    " .. fmt(_("One-way signal facing the wrong way, {distance} after {station}"), {
 					distance = formatLength(b.distance), station = from.name,
-				}), "font-scale-annotation", b.pos)
+				}), "font-scale-annotation", signalPosition(b.signal.list, b.pos), b.signal.list)
 			end
 		end
 	end
@@ -581,12 +594,17 @@ local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : Body
 	for __, row in ipairs(state:old()) do
 		local text = builtin.TextView{ meta = { class = row.class }, text = row.text }
 		if row.pos ~= nil then
-			local pos = row.pos
+			local pos, entity = row.pos, row.entity
 			children[#children + 1] = builtin.Button{
 				meta = { tooltip = _("Show on the map") },
 				content = builtin.BoxLayout{ children = { text } },
 				onClick = function()
-					api.gui.camera.focusPosition(pos, 200)
+					-- as close as the camera goes: it clamps to its own minimum distance
+					api.gui.camera.focusPosition(pos, 10)
+					if entity ~= nil then
+						-- what the base game's clickable names do: opens the signal's own window
+						react.fireEvent(nil, "selectEntity", { entity = entity, stack = true })
+					end
 				end,
 			}
 		else
