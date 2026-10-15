@@ -483,11 +483,12 @@ local record Row
 	level : integer   -- indent: 0 titles, 1 details, 2 details of a detail
 	text : string
 	class : string
-	pos : Vec3f   -- set: the row is a button that moves the camera here
+	pos : Vec3f   -- set: the row is a button with a locate pin that moves the camera here
+	tooltip : string
 end
 
-local function addRow(rows : {Row}, level : integer, text : string, class? : string, pos? : Vec3f)
-	rows[#rows + 1] = { level = level, text = text, class = class or "font-scale-body", pos = pos }
+local function addRow(rows : {Row}, level : integer, text : string, class? : string, pos? : Vec3f, tooltip? : string)
+	rows[#rows + 1] = { level = level, text = text, class = class or "font-scale-body", pos = pos, tooltip = tooltip }
 end
 
 -- Where a signal stands: its own bounding box if it has one, else the middle of its piece of track.
@@ -552,9 +553,9 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 		local f = frontierOf(track, from, to, v)
 		if f ~= nil then
 			log(string.format("  stuck at %.0f m, pos (%.0f, %.0f)", f.distance, f.pos.x, f.pos.y))
-			addRow(rows, level, fmt(_("Trains get no closer to {to} than here, {distance} after {station}. Is the track connected?"), {
-				to = to.name, distance = formatLength(f.distance), station = from.name,
-			}), "font-scale-annotation", f.pos)
+			addRow(rows, level, fmt(_("Trains get stuck here, {distance} after {station}"), {
+				distance = formatLength(f.distance), station = from.name,
+			}), "font-scale-annotation", f.pos, fmt(_("Trains get no closer to {to} than this. Is the track connected?"), { to = to.name }))
 		else
 			addRow(rows, level, _("No terminals work, and no track leads there"), "font-scale-annotation")
 		end
@@ -571,14 +572,20 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 	for __, b in ipairs(blockers) do
 		log(string.format("  blocker: list %s[%d] %s at %.0f m, pos (%.0f, %.0f)", tostring(b.signal.list), b.signal.index,
 			b.signal.typeText, b.distance, b.pos.x, b.pos.y))
-		-- the name the game gives the signal ("Signal #4"), as in its window
+		-- the name the game gives the signal ("Signal #4"), as in its window; under an "or change these one-way
+		-- signals" heading the row needn't say what's wrong with it
 		local name = entityName(b.signal.list)
-		local text = (name ~= "?" and name ~= "")
-			and fmt(_("One-way signal ({name}) facing the wrong way, {distance} after {station}"), {
-				name = name, distance = formatLength(b.distance), station = from.name })
-			or fmt(_("One-way signal facing the wrong way, {distance} after {station}"), {
-				distance = formatLength(b.distance), station = from.name })
-		addRow(rows, level, text, "font-scale-annotation", signalPosition(b.signal.list, b.pos))
+		local named = name ~= "?" and name ~= ""
+		local values = { name = name, distance = formatLength(b.distance), station = from.name }
+		local text : string
+		if orChange then
+			text = named and fmt(_("{name}, {distance} after {station}"), values) or fmt(_("Signal, {distance} after {station}"), values)
+		else
+			text = named and fmt(_("Wrong-way one-way signal ({name}), {distance} after {station}"), values)
+				or fmt(_("Wrong-way one-way signal, {distance} after {station}"), values)
+		end
+		addRow(rows, level, text, "font-scale-annotation", signalPosition(b.signal.list, b.pos),
+			_("A one-way signal facing against the train. Turn it round or remove it."))
 	end
 end
 
@@ -688,11 +695,7 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 
 	local function legTitle(i : integer) : string
 		local from, to = stops[i], stops[i % n + 1]
-		return fmt(_("Leg {leg}: {from} [{fromTerminal}] → {to} [{toTerminal}]"), {
-			leg = tostring(i),
-			from = from.name, fromTerminal = terminalLabel(from.candidates[from.current]),
-			to = to.name, toTerminal = terminalLabel(to.candidates[to.current]),
-		})
+		return fmt(_("Leg {leg}: {from} → {to}"), { leg = tostring(i), from = from.name, to = to.name })
 	end
 
 	if not agree then
@@ -731,8 +734,9 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 			for __, change in ipairs(fix.changes) do
 				anyChange = true
 				local s = stops[change.stop]
-				addRow(rows, 1, fmt(_("Use {terminal} at {station}"), {
+				addRow(rows, 1, fmt(_("Use {terminal} at {station} (now {current})"), {
 					terminal = terminalLabel(s.candidates[change.candidate]), station = s.name,
+					current = terminalLabel(s.candidates[s.current]),
 				}), "font-scale-annotation")
 			end
 		else
@@ -754,9 +758,11 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 							sub = stretchLabel
 						end
 						addRow(rows, 1, _("Either move the waypoint:"), "font-scale-headline")
-						addRow(rows, 2, fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction? (Waypoints only show in Manage Line.)"), {
-							from = ends[k].name, to = ends[k + 1].name, waypoint = wp.name,
-						}), "font-scale-annotation", endPosition(track, wp))
+						local question = ends[k + 1] == wp
+							and fmt(_("{waypoint} can't be reached from {from}"), { waypoint = wp.name, from = ends[k].name })
+							or fmt(_("Trains can't get from {waypoint} to {to}"), { waypoint = wp.name, to = ends[k + 1].name })
+						addRow(rows, 2, question, "font-scale-annotation", endPosition(track, wp),
+							_("Is the waypoint on the track for this direction? Waypoints only show in Manage Line."))
 					elseif wp ~= nil then
 						-- the far side of a waypoint already asked about: part of the same "or" block
 						addRow(rows, 2, stretchLabel, "font-scale-annotation")
@@ -797,20 +803,32 @@ local Body = react.RegisterRecipe("PgraceRailDoctorBody", function(params : Body
 	end)
 	local children : {TreeNodeId} = {}
 	for __, row in ipairs(state:old()) do
-		local indent = string.rep("    ", row.level) .. ((row.pos == nil and row.level > 0) and "  " or "")
-		local text = builtin.TextView{ meta = { class = row.class }, text = indent .. row.text }
+		local indent = string.rep("  ", row.level)
 		if row.pos ~= nil then
 			local pos = row.pos
 			children[#children + 1] = builtin.Button{
-				meta = { tooltip = _("Show on the map") },
-				content = builtin.BoxLayout{ children = { text } },
+				meta = { tooltip = row.tooltip or _("Show on the map") },
+				content = builtin.BoxLayout{
+					orientation = builtin.type.Orientation.Horizontal,
+					children = {
+						builtin.TextView{ meta = { class = row.class }, text = indent },
+						builtin.ImageView{
+							meta = { class = "pgrace-rail-doctor-pin" },
+							path = "::/gui/line_vehicle_mgmt/icons/symbol_locate.tga",
+							scaling = builtin.type.ImageViewScaling.AutoFit,
+						},
+						builtin.TextView{ meta = { class = row.class }, text = " " .. row.text },
+					},
+				},
 				onClick = function()
 					-- as close as the camera goes: it clamps to its own minimum distance
 					api.gui.camera.focusPosition(pos, 10)
 				end,
 			}
 		else
-			children[#children + 1] = text
+			-- buttons pad their content: indent plain rows a little more so they line up
+			children[#children + 1] = builtin.TextView{ meta = { class = row.class },
+				text = indent .. (row.level > 0 and " " or "") .. row.text }
 		end
 	end
 	return builtin.BoxLayout{ children = children }
