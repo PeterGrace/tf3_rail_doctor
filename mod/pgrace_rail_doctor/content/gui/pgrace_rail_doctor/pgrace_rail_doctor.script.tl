@@ -114,20 +114,16 @@ local record SignalAt
 	typeText : string
 end
 
--- How a signal blocks a train, until a probe settles it: whether getSignal(edge, false) is the signal for trains
--- running node0 -> node1 (not swapped) or the other way (swapped), and whether only one-way signals block from behind.
+-- How a signal blocks a train: whether getSignal(edge, false) is the signal for trains running node0 -> node1 (not
+-- swapped) or the other way (swapped), and whether only one-way signals block from behind. Settled in-game on the
+-- test map (scenario E): swapped, one-way only. The others are kept for the self-check's log only.
 local record Variant
 	name : string
 	swap : boolean
 	oneWayOnly : boolean
 end
 
-local VARIANTS : {Variant} = {
-	{ name = "A-oneway", swap = false, oneWayOnly = true },
-	{ name = "B-oneway", swap = true, oneWayOnly = true },
-	{ name = "A-any", swap = false, oneWayOnly = false },
-	{ name = "B-any", swap = true, oneWayOnly = false },
-}
+local VERIFIED : Variant = { name = "B-oneway", swap = true, oneWayOnly = true }
 
 local MAX_EXPANDED = 50000
 local BUDGET_US = 1000000   -- the whole check stops after 1 s (it runs on the main thread when the window opens)
@@ -464,10 +460,10 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 	end
 	logBestAssignment(lineEntity, line)
 
-	-- Which reading of the signals makes our search agree with the game on every leg?
+	-- Self-check: does our search agree with the game on every leg?
 	local track = newTrack()
 	local chosen : Variant = nil
-	for __, v in ipairs(VARIANTS) do
+	for __, v in ipairs({ VERIFIED }) do
 		local parts : {string} = {}
 		local agree = true
 		for i = 1, n do
@@ -477,8 +473,8 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 				r.found and "ok" or "NO", r.expanded, pf and "ok" or "NO")
 			if r.found == gameBroken[i] then
 				agree = false
-				if v.name == "A-any" and r.found then
-					dumpRoute(track, "leg " .. i .. " (A-any, game says no path)", r)   -- PROBE
+				if r.found then
+					dumpRoute(track, "leg " .. i .. " (game says no path)", r)   -- PROBE
 				end
 			end
 		end
