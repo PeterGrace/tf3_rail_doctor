@@ -949,30 +949,6 @@ local function lengthsFrom(track : Track, from : End, goals : {End}, pause : fun
 	return out
 end
 
--- PROBE (remove before release): the length of the path each train on the line is driving, next to ours for that leg.
-local function logTrainPaths(lineEntity : Engine.Entity, n : integer, actualOf : function(leg : integer) : number)
-	pcall(function() : boolean
-		for __, vehicle in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(lineEntity) or {}) do
-			local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE) as Engine.Component.TransportVehicle
-			local mp = api.engine.getComponent(vehicle, api.type.ComponentType.MOVE_PATH) as Engine.Component.MovePath
-			if tv ~= nil and mp ~= nil then
-				local total = 0.0
-				for __, entry in ipairs(mp.path.edges as {any}) do
-					local id = (entry as {string : any}).edgeId as EdgeId
-					local tn = api.engine.getComponent(id.entity, api.type.ComponentType.TRANSPORT_NETWORK) as Engine.Component.TransportNetwork
-					local edge = tn and tn.edges[id.index + 1]
-					total = total + (edge and edge.geometry.length or 0)
-				end
-				local s = tv.stopIndex   -- the stop it's heading to, zero-based
-				local leg = s == 0 and n or s
-				log(string.format("probe train %s heading to stop %d (leg %d): path %.0f m, %d edges; ours %s m", tostring(vehicle),
-					s + 1, leg, total, #(mp.path.edges as {any}), tostring(actualOf(leg) and math.floor(actualOf(leg)))))
-			end
-		end
-		return true
-	end)
-end
-
 -- The detour check as a job: tasks (one shortest-path search each) to run a few per frame, then finish() builds the
 -- card's rows. Coroutines can't be used: an engine call inside one fails ("Value is not a string, but a thread").
 local record DetourJob
@@ -1067,7 +1043,6 @@ local function detourJob(lineEntity : Engine.Entity, track : Track) : DetourJob
 	local function actualOf(leg : integer) : number
 		return dist(leg, stops[leg].current, stops[leg % n + 1].current)
 	end
-	logTrainPaths(lineEntity, n, actualOf)   -- PROBE
 
 	local flagged : {integer : {number, number}} = {}
 	local any = false
