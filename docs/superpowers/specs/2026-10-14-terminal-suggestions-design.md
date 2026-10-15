@@ -34,3 +34,28 @@ A card on the line window (`LineEowExtensionPoint`, order 25), shown only when a
 
 - An Apply button (`makeLineUpdateCmd` on a copy of the line, as Bus Loops does).
 - Finding the blocking signal when no terminals work.
+
+## What it became (verified on a flat test map, scenarios A–L)
+
+The pathfinder API (`findPathNodeToNode`) disagreed with the game on the first broken line, so reachability is our
+own search instead:
+
+- **Track search** (`route.tl` + the track code in the script): states are pieces of track entered in one
+  direction; a train carries on only where tangents agree and reverses only at its stop. A one-way signal passed
+  from behind costs 1. With costs as walls the search must agree with the game on every stretch (the self-check),
+  or the card gives no advice.
+- **Signal direction and type** (scenario E): for a train running node0 → node1 the blocking signal is
+  `getSignal(edge, false)`; type 1 is one-way, 0 a normal two-way signal (scenario I: ignored).
+- **Terminals** (G): the solver above, with this search as `reach`. Verified: one suggested change fixed two legs.
+- **No terminal helps:** up to two wrong-way signals are listed by name and distance (E, H). More than two means the
+  route is running against the other track's traffic, so the card shows where trains get stuck instead (F: right at
+  the gap).
+- **Waypoints** (J): one problem entry per stretch; waypoints are directionless spots on the track. A broken
+  stretch next to a waypoint is offered as "Either move the waypoint / Or change these one-way signals".
+- **Alternative terminals** (L): the game's `noPathFrom/ToAlternative` names the terminal; same either/or layout.
+- **Transport-mode problems** (K): the game's `noPathLocation` and its own text ("Missing catenaries"); those
+  stretches stay out of our search.
+- **Layout:** rows indented by level, locate pins on clickable rows (camera at the closest zoom), explanations in
+  tooltips, a gap between legs.
+
+Not done: silent detours (a wrong terminal where a loop offers a long way round; scenario D), an Apply button.
