@@ -8,4 +8,13 @@ global record PgraceRailDoctorDetour
 
 	-- Whether a leg of this length, against its best, is a detour worth reporting: at least 25% and 500 m longer.
 	isDetour : function(actual : number, best : number) : boolean
+
+	record Point
+		x : number
+		y : number
+	end
+
+	-- The index of the point on route that lies furthest from all of other (on the map, ignoring height): where a long
+	-- way round strays furthest from the short way. nil when either list is empty.
+	farthest : function(route : {Point}, other : {Point}) : integer
 end

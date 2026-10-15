@@ -27,6 +27,8 @@ global record PgraceRailDoctorRoute
 	record Distances
 		-- goal id -> the shortest length to any state of that goal; unreachable goals are missing
 		found : {string : number}
+		-- goal id -> the states from a start to that goal, both included
+		paths : {string : {string}}
 		expanded : integer
 	end
 

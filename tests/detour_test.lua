@@ -50,3 +50,21 @@ t.test("isDetour: needs both 25% and 500 m longer", function()
 	t.eq(detour.isDetour(nil, 600), false)
 	t.eq(detour.isDetour(1200, nil), false)
 end)
+
+local function pts(list)
+	local out = {}
+	for _, p in ipairs(list) do out[#out + 1] = { x = p[1], y = p[2] } end
+	return out
+end
+
+t.test("farthest: the route point furthest from every other point", function()
+	-- the long way runs out to (0, 900) and back; the short way stays on the x axis
+	local long = pts({ { 0, 0 }, { 0, 500 }, { 0, 900 }, { 300, 400 }, { 600, 0 } })
+	local short = pts({ { 0, 0 }, { 300, 0 }, { 600, 0 } })
+	t.eq(detour.farthest(long, short), 3)
+end)
+
+t.test("farthest: nil without points", function()
+	t.eq(detour.farthest({}, pts({ { 0, 0 } })), nil)
+	t.eq(detour.farthest(pts({ { 0, 0 } }), {}), nil)
+end)

@@ -108,6 +108,7 @@ end
 
 function route.shortest(starts : {PgraceRailDoctorRoute.Weighted}, goalOf : function(string) : string, goalCount : integer, next : function(string) : {PgraceRailDoctorRoute.Weighted}, maxExpanded : integer) : PgraceRailDoctorRoute.Distances
 	local best : {string : number} = {}
+	local parent : {string : string} = {}
 	local done : {string : boolean} = {}
 	local heap : {Entry} = {}
 	for __, s in ipairs(starts) do
@@ -117,6 +118,7 @@ function route.shortest(starts : {PgraceRailDoctorRoute.Weighted}, goalOf : func
 		end
 	end
 	local found : {string : number} = {}
+	local paths : {string : {string}} = {}
 	local count, expanded = 0, 0
 	while #heap > 0 and count < goalCount and expanded < maxExpanded do
 		local e = heapPop(heap)
@@ -126,18 +128,26 @@ function route.shortest(starts : {PgraceRailDoctorRoute.Weighted}, goalOf : func
 			local goal = goalOf(e.key)
 			if goal ~= nil and found[goal] == nil then
 				found[goal] = e.length
+				local keys : {string} = {}
+				local k = e.key
+				while k ~= nil do
+					table.insert(keys, 1, k)
+					k = parent[k]
+				end
+				paths[goal] = keys
 				count = count + 1
 			end
 			for __, step in ipairs(next(e.key) or {}) do
 				local length = e.length + step.length
 				if not done[step.key] and (best[step.key] == nil or length < best[step.key]) then
 					best[step.key] = length
+					parent[step.key] = e.key
 					heapPush(heap, { key = step.key, length = length })
 				end
 			end
 		end
 	end
-	return { found = found, expanded = expanded }
+	return { found = found, paths = paths, expanded = expanded }
 end
 
 return route

@@ -51,4 +51,27 @@ function detour.isDetour(actual : number, best : number) : boolean
 	return actual >= best * (1 + MIN_EXTRA_FRACTION) and actual - best >= MIN_EXTRA_METRES
 end
 
+function detour.farthest(route : {PgraceRailDoctorDetour.Point}, other : {PgraceRailDoctorDetour.Point}) : integer
+	if #other == 0 then
+		return nil
+	end
+	local bestIndex : integer = nil
+	local bestDist = -1.0
+	for i, p in ipairs(route) do
+		local nearest = math.huge
+		for __, q in ipairs(other) do
+			local dx, dy = p.x - q.x, p.y - q.y
+			local d = dx * dx + dy * dy
+			if d < nearest then
+				nearest = d
+			end
+		end
+		if nearest > bestDist then
+			bestDist = nearest
+			bestIndex = i
+		end
+	end
+	return bestIndex
+end
+
 return detour
