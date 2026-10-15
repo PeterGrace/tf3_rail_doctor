@@ -535,7 +535,15 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 	local r = searchBetween(track, from, to, v, false)
 	local blockers = r.found and blockersOn(track, r, v) or {}
 	log(string.format("%s: cheapest route passes %d signal(s) the wrong way (%d states)", label, #blockers, r.expanded))
+	local function orHeading(text : string)
+		addRow(rows, level, " ", "font-scale-annotation")   -- a small gap between the two ways to fix it
+		addRow(rows, level, text, "font-scale-headline")
+		level = level + 1
+	end
 	if #blockers == 0 or #blockers > MAX_SIGNALS_LISTED then
+		if orChange then
+			orHeading(_("Or check the track:"))
+		end
 		local f = frontierOf(track, from, to, v)
 		if f ~= nil then
 			log(string.format("  stuck at %.0f m, pos (%.0f, %.0f)", f.distance, f.pos.x, f.pos.y))
@@ -553,8 +561,7 @@ local function reportStretch(rows : {Row}, track : Track, from : End, to : End, 
 		return
 	end
 	if orChange then
-		addRow(rows, level, _("Or change these one-way signals:"), "font-scale-annotation")
-		level = level + 1
+		orHeading(_("Or change these one-way signals:"))
 	end
 	for __, b in ipairs(blockers) do
 		log(string.format("  blocker: list %s[%d] %s at %.0f m, pos (%.0f, %.0f)", tostring(b.signal.list), b.signal.index,
@@ -735,7 +742,8 @@ local function diagnose(lineEntity : Engine.Entity) : {Row}
 					if wp ~= nil and not asked[wp] then
 						asked[wp] = true
 						orChange = true
-						addRow(rows, 1, fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction? (Waypoints only show in Manage Line.)"), {
+						addRow(rows, 1, _("Either move the waypoint:"), "font-scale-headline")
+						addRow(rows, 2, fmt(_("Trains can't get from {from} to {to}. Is {waypoint} on the track for this direction? (Waypoints only show in Manage Line.)"), {
 							from = ends[k].name, to = ends[k + 1].name, waypoint = wp.name,
 						}), "font-scale-annotation", endPosition(track, wp))
 					elseif #ends > 2 then
