@@ -243,7 +243,7 @@ local function stateKey(edge : Engine.Entity, forward : boolean) : string
 end
 
 local function parseKey(key : string) : Engine.Entity, boolean
-	return math.tointeger(tonumber(key:sub(1, -2))) as Engine.Entity, key:sub(-1) == "+"
+	return math.floor(tonumber(key:sub(1, -2))) as Engine.Entity, key:sub(-1) == "+"
 end
 
 local function dot2(a : Vec3f, b : Vec3f) : number
