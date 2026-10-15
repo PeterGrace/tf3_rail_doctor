@@ -7,7 +7,7 @@
     ],
     "name": "Rail Doctor",
     "summary": "Finds why a rail line can't reach its stations: wrong terminals, wrong-way signals, gaps, catenary.",
-    "description": "Adds a card to the line window of a rail line the game reports as broken. It works out which terminal changes would give every leg a path, names one-way signals facing the wrong way, points at gaps in the track, waypoints on the wrong track and alternative terminals trains can't use, and shows the game's own reason for missing catenary. Click a row and the camera zooms in on the spot. Cosmetic: achievements stay enabled.",
+    "description": "Adds a card to the line window of a rail line the game reports as broken. It works out which terminal changes would give every leg a path, names one-way signals facing the wrong way, points at gaps in the track, waypoints on the wrong track and alternative terminals trains can't use, and shows the game's own reason for missing catenary. On rail lines that work, it checks in the background whether trains take the long way round because of a terminal, and suggests the terminals that shorten the line. Click a row and the camera zooms in on the spot. Cosmetic: achievements stay enabled.",
     "tags": [
         "Script Mod"
     ],
@@ -16,62 +16,62 @@
         "de": {
             "name": "Rail Doctor",
             "summary": "Findet, warum eine Bahnlinie ihre Bahnhöfe nicht verbindet: Terminals, falsche Signale, Lücken.",
-            "description": "Fügt dem Linienfenster einer Bahnlinie, die das Spiel als gestört meldet, eine Karte hinzu. Sie ermittelt, welche Terminal-Änderungen jedem Abschnitt einen Weg geben, nennt Einbahnsignale in falscher Richtung und zeigt Gleislücken, Wegpunkte auf dem falschen Gleis und alternative Terminals, die Züge nicht nutzen können, sowie den Grund des Spiels für fehlende Oberleitungen. Ein Klick auf eine Zeile zoomt die Kamera an die Stelle. Kosmetisch: Errungenschaften bleiben aktiviert."
+            "description": "Fügt dem Linienfenster einer Bahnlinie, die das Spiel als gestört meldet, eine Karte hinzu. Sie ermittelt, welche Terminal-Änderungen jedem Abschnitt einen Weg geben, nennt Einbahnsignale in falscher Richtung und zeigt Gleislücken, Wegpunkte auf dem falschen Gleis und alternative Terminals, die Züge nicht nutzen können, sowie den Grund des Spiels für fehlende Oberleitungen. Bei funktionierenden Bahnlinien prüft sie im Hintergrund, ob Züge wegen eines Terminals einen Umweg fahren, und schlägt die Terminals vor, die die Linie verkürzen. Ein Klick auf eine Zeile zoomt die Kamera an die Stelle. Kosmetisch: Errungenschaften bleiben aktiviert."
         },
         "es": {
             "name": "Rail Doctor",
             "summary": "Encuentra por qué una línea de tren no conecta sus estaciones: terminales, señales, huecos.",
-            "description": "Añade una tarjeta a la ventana de una línea de tren que el juego marca como rota. Calcula qué cambios de terminal darían ruta a cada tramo, nombra las señales de sentido único al revés y señala huecos en la vía, puntos de ruta en la vía equivocada y terminales alternativas que los trenes no pueden usar, además del motivo del juego cuando faltan catenarias. Al hacer clic en una fila, la cámara se acerca al lugar. Cosmético: los logros siguen activos."
+            "description": "Añade una tarjeta a la ventana de una línea de tren que el juego marca como rota. Calcula qué cambios de terminal darían ruta a cada tramo, nombra las señales de sentido único al revés y señala huecos en la vía, puntos de ruta en la vía equivocada y terminales alternativas que los trenes no pueden usar, además del motivo del juego cuando faltan catenarias. En las líneas de tren que funcionan, comprueba en segundo plano si los trenes dan un rodeo por culpa de una terminal y sugiere las terminales que acortan la línea. Al hacer clic en una fila, la cámara se acerca al lugar. Cosmético: los logros siguen activos."
         },
         "fr": {
             "name": "Rail Doctor",
             "summary": "Trouve pourquoi une ligne ferroviaire ne relie pas ses gares : terminaux, signaux, coupures.",
-            "description": "Ajoute une carte à la fenêtre d'une ligne ferroviaire que le jeu signale comme interrompue. Elle détermine quels changements de terminal donneraient un chemin à chaque tronçon, nomme les signaux à sens unique à l'envers et montre les coupures de voie, les points de passage sur la mauvaise voie et les terminaux alternatifs inutilisables, ainsi que la raison donnée par le jeu pour les caténaires manquantes. Un clic sur une ligne zoome la caméra sur l'endroit. Cosmétique : les succès restent activés."
+            "description": "Ajoute une carte à la fenêtre d'une ligne ferroviaire que le jeu signale comme interrompue. Elle détermine quels changements de terminal donneraient un chemin à chaque tronçon, nomme les signaux à sens unique à l'envers et montre les coupures de voie, les points de passage sur la mauvaise voie et les terminaux alternatifs inutilisables, ainsi que la raison donnée par le jeu pour les caténaires manquantes. Sur les lignes qui fonctionnent, elle vérifie en arrière-plan si les trains font un détour à cause d'un terminal et propose les terminaux qui raccourcissent la ligne. Un clic sur une ligne zoome la caméra sur l'endroit. Cosmétique : les succès restent activés."
         },
         "it": {
             "name": "Rail Doctor",
             "summary": "Trova perché una linea ferroviaria non collega le sue stazioni: terminal, segnali, interruzioni.",
-            "description": "Aggiunge una scheda alla finestra di una linea ferroviaria che il gioco segnala come interrotta. Calcola quali cambi di terminal darebbero un percorso a ogni tratta, indica i segnali a senso unico al contrario e mostra interruzioni del binario, tappe sul binario sbagliato e terminal alternativi che i treni non possono usare, oltre al motivo del gioco per le catenarie mancanti. Un clic su una riga avvicina la telecamera al punto. Cosmetica: gli obiettivi restano attivi."
+            "description": "Aggiunge una scheda alla finestra di una linea ferroviaria che il gioco segnala come interrotta. Calcola quali cambi di terminal darebbero un percorso a ogni tratta, indica i segnali a senso unico al contrario e mostra interruzioni del binario, tappe sul binario sbagliato e terminal alternativi che i treni non possono usare, oltre al motivo del gioco per le catenarie mancanti. Sulle linee ferroviarie funzionanti controlla in background se i treni fanno il giro lungo per colpa di un terminal e suggerisce i terminal che accorciano la linea. Un clic su una riga avvicina la telecamera al punto. Cosmetica: gli obiettivi restano attivi."
         },
         "ja": {
             "name": "Rail Doctor",
             "summary": "鉄道路線が駅をつなげない理由を見つけます：ターミナル、逆向きの信号、線路の途切れ、架線。",
-            "description": "ゲームが不通と報告した鉄道路線の路線ウィンドウにカードを追加します。各区間に経路ができるターミナルの変更を求め、逆向きの一方通行信号を名前で示し、線路の途切れ、逆方向の線路上のウェイポイント、使えない代替ターミナル、架線不足についてのゲーム自身の理由を表示します。行をクリックするとカメラがその場所へズームします。見た目のみのMOD：実績は有効のままです。"
+            "description": "ゲームが不通と報告した鉄道路線の路線ウィンドウにカードを追加します。各区間に経路ができるターミナルの変更を求め、逆向きの一方通行信号を名前で示し、線路の途切れ、逆方向の線路上のウェイポイント、使えない代替ターミナル、架線不足についてのゲーム自身の理由を表示します。正常な鉄道路線では、ターミナルのせいで列車が遠回りしていないかをバックグラウンドで調べ、路線を短くするターミナルを提案します。行をクリックするとカメラがその場所へズームします。見た目のみのMOD：実績は有効のままです。"
         },
         "ko": {
             "name": "Rail Doctor",
             "summary": "철도 노선이 역을 잇지 못하는 이유를 찾습니다: 터미널, 반대 방향 신호기, 끊긴 선로, 전차선.",
-            "description": "게임이 끊겼다고 알리는 철도 노선의 노선 창에 카드를 추가합니다. 모든 구간에 경로가 생기는 터미널 변경을 찾고, 반대 방향 일방통행 신호기를 이름으로 알려 주며, 끊긴 선로, 잘못된 선로의 중간 지점, 열차가 쓸 수 없는 대체 터미널, 전차선이 없을 때 게임이 알려 주는 이유를 보여 줍니다. 줄을 클릭하면 카메라가 그 지점으로 확대됩니다. 외형 전용: 업적은 계속 활성화됩니다."
+            "description": "게임이 끊겼다고 알리는 철도 노선의 노선 창에 카드를 추가합니다. 모든 구간에 경로가 생기는 터미널 변경을 찾고, 반대 방향 일방통행 신호기를 이름으로 알려 주며, 끊긴 선로, 잘못된 선로의 중간 지점, 열차가 쓸 수 없는 대체 터미널, 전차선이 없을 때 게임이 알려 주는 이유를 보여 줍니다. 정상적인 철도 노선에서는 터미널 때문에 열차가 먼 길로 돌아가는지 백그라운드에서 확인하고, 노선을 줄이는 터미널을 제안합니다. 줄을 클릭하면 카메라가 그 지점으로 확대됩니다. 외형 전용: 업적은 계속 활성화됩니다."
         },
         "nl": {
             "name": "Rail Doctor",
             "summary": "Vindt waarom een spoorlijn zijn stations niet verbindt: terminals, verkeerde seinen, gaten.",
-            "description": "Voegt een kaart toe aan het lijnvenster van een spoorlijn die het spel als onderbroken meldt. Hij berekent welke terminalwijzigingen elk traject een route geven, noemt verkeerd gerichte eenrichtingsseinen en wijst gaten in het spoor, routepunten op het verkeerde spoor en onbruikbare alternatieve terminals aan, plus de reden van het spel voor ontbrekende bovenleidingen. Klik op een rij en de camera zoomt in op de plek. Cosmetisch: prestaties blijven ingeschakeld."
+            "description": "Voegt een kaart toe aan het lijnvenster van een spoorlijn die het spel als onderbroken meldt. Hij berekent welke terminalwijzigingen elk traject een route geven, noemt verkeerd gerichte eenrichtingsseinen en wijst gaten in het spoor, routepunten op het verkeerde spoor en onbruikbare alternatieve terminals aan, plus de reden van het spel voor ontbrekende bovenleidingen. Bij spoorlijnen die werken, controleert hij op de achtergrond of treinen door een terminal omrijden, en stelt hij de terminals voor die de lijn korter maken. Klik op een rij en de camera zoomt in op de plek. Cosmetisch: prestaties blijven ingeschakeld."
         },
         "pl": {
             "name": "Rail Doctor",
             "summary": "Znajduje, czemu linia kolejowa nie łączy stacji: terminale, odwrócone sygnalizatory, przerwy.",
-            "description": "Dodaje kartę do okna linii kolejowej, którą gra zgłasza jako przerwaną. Ustala, jakie zmiany terminali dadzą drogę na każdym odcinku, wskazuje odwrócone sygnalizatory jednokierunkowe oraz przerwy w torze, punkty nawigacyjne na złym torze i alternatywne terminale, z których pociągi nie mogą korzystać, a przy braku trakcji podaje powód z gry. Kliknięcie wiersza przybliża kamerę do miejsca. Kosmetyczny: osiągnięcia pozostają włączone."
+            "description": "Dodaje kartę do okna linii kolejowej, którą gra zgłasza jako przerwaną. Ustala, jakie zmiany terminali dadzą drogę na każdym odcinku, wskazuje odwrócone sygnalizatory jednokierunkowe oraz przerwy w torze, punkty nawigacyjne na złym torze i alternatywne terminale, z których pociągi nie mogą korzystać, a przy braku trakcji podaje powód z gry. Na działających liniach kolejowych sprawdza w tle, czy pociągi nie jadą okrężną drogą przez terminal, i proponuje terminale, które skracają linię. Kliknięcie wiersza przybliża kamerę do miejsca. Kosmetyczny: osiągnięcia pozostają włączone."
         },
         "pt_BR": {
             "name": "Rail Doctor",
             "summary": "Descobre por que uma linha de trem não liga suas estações: terminais, sinais, falhas na via.",
-            "description": "Adiciona um cartão à janela de uma linha de trem que o jogo aponta como interrompida. Ele calcula quais trocas de terminal dariam caminho a cada trecho, nomeia sinais de sentido único invertidos e aponta falhas na via, pontos de referência na via errada e terminais alternativos que os trens não podem usar, além do motivo do jogo para catenárias ausentes. Clique numa linha e a câmera aproxima do local. Cosmético: as conquistas continuam ativas."
+            "description": "Adiciona um cartão à janela de uma linha de trem que o jogo aponta como interrompida. Ele calcula quais trocas de terminal dariam caminho a cada trecho, nomeia sinais de sentido único invertidos e aponta falhas na via, pontos de referência na via errada e terminais alternativos que os trens não podem usar, além do motivo do jogo para catenárias ausentes. Nas linhas de trem que funcionam, verifica em segundo plano se os trens fazem um desvio por causa de um terminal e sugere os terminais que encurtam a linha. Clique numa linha e a câmera aproxima do local. Cosmético: as conquistas continuam ativas."
         },
         "ru": {
             "name": "Rail Doctor",
             "summary": "Находит, почему ж/д маршрут не соединяет станции: терминалы, семафоры, разрывы пути.",
-            "description": "Добавляет карточку в окно железнодорожного маршрута, который игра считает прерванным. Определяет, какие изменения терминалов дадут путь на каждом перегоне, называет односторонние семафоры, стоящие не в ту сторону, и показывает разрывы пути, путевые точки не на том пути и недоступные альтернативные терминалы, а при нехватке контактной сети — причину от самой игры. Щелчок по строке приближает камеру к месту. Косметический мод: достижения остаются доступны."
+            "description": "Добавляет карточку в окно железнодорожного маршрута, который игра считает прерванным. Определяет, какие изменения терминалов дадут путь на каждом перегоне, называет односторонние семафоры, стоящие не в ту сторону, и показывает разрывы пути, путевые точки не на том пути и недоступные альтернативные терминалы, а при нехватке контактной сети — причину от самой игры. На работающих маршрутах в фоне проверяет, не едут ли поезда в объезд из-за терминала, и предлагает терминалы, сокращающие маршрут. Щелчок по строке приближает камеру к месту. Косметический мод: достижения остаются доступны."
         },
         "zh_CN": {
             "name": "Rail Doctor",
             "summary": "找出铁路线路无法连通车站的原因：停靠位、方向错误的信号灯、轨道断口、接触网。",
-            "description": "在游戏报告为中断的铁路线路窗口中添加一张卡片。它会算出哪些停靠位更改能让每个区段都有路径，指出方向错误的单向信号灯，标出轨道断口、位于错误轨道上的导航点和列车无法使用的备用停靠位，并在缺少接触网时显示游戏自身给出的原因。点击一行，镜头会拉近到该处。仅外观：成就保持开启。"
+            "description": "在游戏报告为中断的铁路线路窗口中添加一张卡片。它会算出哪些停靠位更改能让每个区段都有路径，指出方向错误的单向信号灯，标出轨道断口、位于错误轨道上的导航点和列车无法使用的备用停靠位，并在缺少接触网时显示游戏自身给出的原因。对于正常运行的铁路线路，它会在后台检查列车是否因停靠位而绕远路，并建议能缩短线路的停靠位。点击一行，镜头会拉近到该处。仅外观：成就保持开启。"
         },
         "zh_TW": {
             "name": "Rail Doctor",
             "summary": "找出鐵路路線無法連接車站的原因：總站、方向錯誤的號誌、軌道斷口、電纜。",
-            "description": "在遊戲回報為中斷的鐵路路線視窗中加入一張卡片。它會算出哪些總站變更能讓每個區段都有路徑，指出方向錯誤的單向號誌，標出軌道斷口、位於錯誤軌道上的定位點和列車無法使用的替代總站，並在缺少電纜時顯示遊戲本身給出的原因。點擊一列，鏡頭會拉近到該處。僅外觀：成就保持開啟。"
+            "description": "在遊戲回報為中斷的鐵路路線視窗中加入一張卡片。它會算出哪些總站變更能讓每個區段都有路徑，指出方向錯誤的單向號誌，標出軌道斷口、位於錯誤軌道上的定位點和列車無法使用的替代總站，並在缺少電纜時顯示遊戲本身給出的原因。對於正常運行的鐵路路線，它會在背景檢查列車是否因總站而繞遠路，並建議能縮短路線的總站。點擊一列，鏡頭會拉近到該處。僅外觀：成就保持開啟。"
         }
     }
 }

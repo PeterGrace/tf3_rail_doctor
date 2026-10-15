@@ -5,11 +5,15 @@ what is in the way and zooms to it: a stop on the wrong terminal (with the termi
 one-way signal facing the wrong way, a gap in the track, a waypoint on the wrong track, an alternative terminal
 trains can't use, or missing catenary (the game's own reason).
 
+On rail lines that work, it checks in the background whether a leg is a silent detour (trains take the long way
+round because of a terminal) and suggests the terminals that make the whole line shortest.
+
 - Mod ID: `pgrace_rail_doctor`
 - Cosmetic: yes. It doesn't affect the simulation, so achievements stay enabled.
 
 Agent and modding notes for all mods live in `../AGENTS.md`. The design and its in-game findings are in
-`docs/superpowers/specs/2026-10-14-terminal-suggestions-design.md`.
+`docs/superpowers/specs/2026-10-14-terminal-suggestions-design.md` and
+`docs/superpowers/specs/2026-10-14-silent-detours-design.md`.
 
 ## How it works
 
@@ -18,6 +22,10 @@ train can drive it: pieces of track (`BASE_EDGE`) between base nodes, carrying o
 reversing only at the stop, and treating a one-way signal passed from behind as blocked. It only advises when its
 search agrees with the game on every stretch. Terminal suggestions come from a small solver over the stops; when no
 terminal helps, a 0/1-cost route search names the fewest signals to change, or shows where trains get stuck.
+
+For lines without a problem, the detour check measures every leg for every pair of terminals (Dijkstra over the same
+track graph, a few searches per frame), flags legs at least 25% and 500 m longer than their best, and picks the
+terminals with the shortest round trip (`detour.tl`).
 
 ## Layout
 
@@ -30,7 +38,8 @@ mod/pgrace_rail_doctor/                        # the mod folder TF3 loads
     ├── pgrace_rail_doctor.script.tl           # track search, diagnosis and the card
     ├── card.css.lua                           # size of the locate pin
     ├── suggest.tl                             # pure: fewest terminal changes (unit-tested)
-    ├── route.tl                               # pure: cheapest route search (unit-tested)
+    ├── route.tl                               # pure: cheapest and shortest route searches (unit-tested)
+    ├── detour.tl                              # pure: detour test and best terminals for the line (unit-tested)
     └── plural.tl                              # pure: plural categories per language (unit-tested)
 tools/                                         # type check, tests, install, release checks
 tests/                                         # unit tests for the pure modules
